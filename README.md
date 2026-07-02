@@ -6,9 +6,10 @@ An extremely fast MOT and HOTA metrics library, written in Rust.
 (MOTA/MOTP), Identity (IDF1), and HOTA — with a Rust core and ergonomic Python
 bindings.
 
-> **Status:** early scaffolding. The build, lint, packaging, and CI pipeline is
-> in place; metric implementations are landing incrementally. See the roadmap
-> below.
+> **Status:** the core metric families — CLEAR, Identity, and HOTA — are
+> implemented on a shared IoU + assignment layer, with MOTChallenge ingest.
+> Bit-exact TrackEval parity on full benchmark sequences is the remaining
+> validation work. See the roadmap below.
 
 ## Install (from source)
 
@@ -17,6 +18,28 @@ uv sync --group dev        # create the environment + install dev tools
 uv run maturin develop     # compile the Rust extension into the venv
 uv run python -c "import motrics; print(motrics.version())"
 ```
+
+## Usage
+
+```python
+import motrics
+
+# Parse MOTChallenge ground truth and tracker results.
+gt = motrics.load_motchallenge("seq/gt/gt.txt")
+pred = motrics.load_motchallenge("seq/res.txt", min_confidence=0.5)
+
+# Align onto a shared frame timeline, then compute metrics.
+gt_ids, gt_boxes, pred_ids, pred_boxes = motrics.align_frames(gt, pred)
+
+clear = motrics.compute_clear(gt_ids, gt_boxes, pred_ids, pred_boxes)
+identity = motrics.compute_identity(gt_ids, gt_boxes, pred_ids, pred_boxes)
+hota = motrics.compute_hota(gt_ids, gt_boxes, pred_ids, pred_boxes)
+
+print(clear.mota, identity.idf1, hota.hota)
+```
+
+Boxes use the `xyxy` convention `(x1, y1, x2, y2)`. The lower-level primitives
+`iou`, `iou_matrix`, and `match_boxes` are also exposed.
 
 ## Development
 
@@ -58,7 +81,8 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 - [x] CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
 - [x] Identity metrics (IDF1 / IDP / IDR)
 - [x] HOTA (DetA, AssA, alpha sweep)
-- [ ] MOTChallenge / TrackEval ingest + parity tests
+- [x] MOTChallenge ingest + integration tests
+- [ ] Full TrackEval numeric parity on benchmark sequences
 
 ## License
 

@@ -19,6 +19,7 @@ from motrics._motrics import (
     match_boxes,
     version,
 )
+from motrics.motchallenge import align_frames, load_motchallenge
 
 __all__ = [
     "ClearMetrics",
@@ -26,11 +27,13 @@ __all__ = [
     "IdentityMetrics",
     "Matching",
     "__version__",
+    "align_frames",
     "compute_clear",
     "compute_hota",
     "compute_identity",
     "iou",
     "iou_matrix",
+    "load_motchallenge",
     "match_boxes",
     "version",
 ]
