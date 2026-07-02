@@ -5,6 +5,20 @@ This package re-exports the public API so users only ever import from
 ``motrics``.
 """
 
-from motrics._motrics import __version__, version
+from motrics._motrics import (
+    Matching,
+    __version__,
+    iou,
+    iou_matrix,
+    match_boxes,
+    version,
+)
 
-__all__ = ["__version__", "version"]
+__all__ = [
+    "Matching",
+    "__version__",
+    "iou",
+    "iou_matrix",
+    "match_boxes",
+    "version",
+]
