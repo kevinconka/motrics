@@ -16,8 +16,8 @@ TrackEval and py-motmetrics are optional (``uv sync --group parity``); each is
 skipped with a note if it is not importable.
 
 Data selection: real MOTChallenge sequences under ``benchmarks/data/real`` are
-used when present; otherwise the committed synthetic fixtures in
-``benchmarks/data`` provide a reproducible, offline baseline. Fetch real data
+used when present; otherwise the synthetic fixtures in ``benchmarks/data``
+(generated on demand) provide a reproducible, offline baseline. Fetch real data
 with ``benchmarks/download.py`` (needs network + accepting the dataset
 license).
 
@@ -189,8 +189,8 @@ def _trackeval_clear_identity(seq: Sequence) -> None:
 def _iou_distance(gt_boxes: list, pred_boxes: list):  # -> np.ndarray
     """IoU distance matrix (1 - IoU) with sub-threshold pairs masked to NaN.
 
-    This is what ``mm.distances.iou_matrix`` produces; we build it directly
-    because that helper calls ``np.asfarray``, removed in NumPy 2.0.
+    Built directly rather than via ``mm.distances.iou_matrix`` (which is not
+    NumPy 2 compatible).
     """
     iou = _np_iou_matrix(gt_boxes, pred_boxes)
     dist = 1.0 - iou

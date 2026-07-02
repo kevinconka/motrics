@@ -96,10 +96,10 @@ _HANDBUILT: list[list[Frame]] = [
     ],
 ]
 
-# Shared MOTChallenge-format fixtures — the *same* committed sequences the
-# benchmark suite measures (benchmarks/data). Loading them here through the
-# public reader means parity is validated on the exact inputs we benchmark,
-# rather than on a separate synthetic generator.
+# Shared MOTChallenge-format fixtures — the *same* generated sequences the
+# benchmark suite measures (benchmarks/data; created on demand by conftest).
+# Loading them here through the public reader means parity is validated on the
+# exact inputs we benchmark, rather than on a separate synthetic generator.
 _FIXTURES_DIR = Path(__file__).parents[1] / "benchmarks" / "data"
 
 

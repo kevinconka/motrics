@@ -6,10 +6,10 @@ MOTChallenge convention::
     <sequence>/gt/gt.txt     # ground truth
     <sequence>/pred.txt      # tracker results
 
-Both the committed synthetic fixtures (``benchmarks/data``) and real
-MOTChallenge sequences fetched by ``download.py`` (``benchmarks/data/real``)
-use this layout, so the benchmark loads either through one code path — the
-public ``motrics.load_motchallenge`` / ``motrics.align_frames`` readers.
+Both the synthetic fixtures (``benchmarks/data``) and real MOTChallenge
+sequences fetched by ``download.py`` (``benchmarks/data/real``) use this layout,
+so the benchmark loads either through one code path — the public
+``motrics.load_motchallenge`` / ``motrics.align_frames`` readers.
 """
 
 from __future__ import annotations
@@ -83,12 +83,22 @@ def default_root() -> tuple[Path, str]:
     return DATA_DIR, "synthetic"
 
 
+def ensure_fixtures() -> None:
+    """Generate the synthetic fixtures if absent (they are generated, not committed)."""
+    if not discover_sequences(DATA_DIR):
+        import generate_fixtures
+
+        generate_fixtures.main()
+
+
 def load_dataset(
     root: Path | None = None, *, min_confidence: float | None = None
 ) -> tuple[list[Sequence], str]:
     """Load every sequence under ``root`` (or the auto-selected default)."""
     if root is None:
         root, kind = default_root()
+        if kind == "synthetic":
+            ensure_fixtures()
     else:
         kind = "real" if root.resolve() == REAL_DIR.resolve() else "synthetic"
     sequences = [

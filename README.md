@@ -83,19 +83,31 @@ MOTChallenge-format sequences:
 
 ```bash
 uv sync --group parity && uv run maturin develop --release --uv  # release build!
-uv run python benchmarks/benchmark.py            # committed synthetic fixtures
+uv run python benchmarks/benchmark.py            # synthetic fixtures (auto-generated)
 ```
 
-It runs on committed fixtures out of the box (offline, reproducible). For real
-MOTChallenge sequences, fetch them first (needs network + accepting the dataset
-license) and rerun:
+It runs on synthetic fixtures out of the box — generated on demand, offline and
+reproducible. For real MOTChallenge sequences, fetch them first (needs network +
+accepting the dataset license) and rerun:
 
 ```bash
 uv run python benchmarks/download.py --dataset MOT15
 uv run python benchmarks/benchmark.py            # auto-detects data/real/
 ```
 
-See [`benchmarks/README.md`](benchmarks/README.md) for methodology and flags.
+Results are validated for **numeric parity** against both references (a hard CI
+gate) before any timing is reported. On a release build, over the three
+synthetic fixtures (30 / 150 / 500 frames; up to ~9k detections):
+
+| Engine        | CLEAR + Identity | Full pipeline (incl. HOTA) |
+| ------------- | ---------------- | -------------------------- |
+| **motrics**   | **1.0×** (baseline) | **1.0×** (baseline)     |
+| TrackEval     | ~6× slower       | ~13× slower                |
+| py-motmetrics | ~27× slower      | — (no HOTA)                |
+
+Ratios are illustrative and machine-dependent; this is a conservative,
+metrics-only comparison (TrackEval is handed pre-aligned arrays). See
+[`benchmarks/README.md`](benchmarks/README.md) for methodology and flags.
 
 ## Roadmap
 
@@ -107,10 +119,10 @@ See [`benchmarks/README.md`](benchmarks/README.md) for methodology and flags.
 - [x] MOTChallenge ingest + integration tests
 - [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
 - [x] Benchmark & parity infrastructure — parity and benchmarks now share
-      MOTChallenge-format fixtures (`benchmarks/data/`, loaded through
-      `motrics.load_motchallenge`); a reproducible `benchmarks/` suite validates
-      numeric parity against **TrackEval** and **py-motmetrics** and measures
-      speedups, running on the committed fixtures in CI. See
+      MOTChallenge-format fixtures (`benchmarks/data/`, generated on demand and
+      loaded through `motrics.load_motchallenge`); a reproducible `benchmarks/`
+      suite validates numeric parity against **TrackEval** and **py-motmetrics**
+      and measures speedups, running on the fixtures in CI. See
       [`benchmarks/README.md`](benchmarks/README.md).
   - [ ] Speedup/parity numbers on **real** MOTChallenge sequences — fetch with
         `benchmarks/download.py`, then rerun the suite. Needs network access to

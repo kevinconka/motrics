@@ -3,13 +3,13 @@
 
 The fixtures are small, synthetic-but-realistic tracking sequences written in
 MOTChallenge CSV format (``frame, id, bb_left, bb_top, bb_width, bb_height,
-conf, x, y, z``). They are committed to the repository so both the parity tests
-(``tests/test_parity.py``) and the benchmark suite (``benchmark.py``) consume
-*one* shared set of inputs, loaded through the public
-``motrics.load_motchallenge`` reader.
+conf, x, y, z``). Both the parity tests (``tests/test_parity.py``) and the
+benchmark suite (``benchmark.py``) consume *one* shared set of inputs, loaded
+through the public ``motrics.load_motchallenge`` reader.
 
-Generation is fully deterministic (seeded ``random.Random``), so re-running this
-script reproduces byte-identical files:
+Generation is deterministic (seeded ``random.Random``), so it reproduces
+byte-identical files and is regenerated on demand — the output is git-ignored,
+not committed:
 
     uv run python benchmarks/generate_fixtures.py
 

@@ -3,29 +3,31 @@
 A reproducible suite that validates `motrics` for **numeric parity** against
 reference MOT evaluators and measures its **speed** on MOTChallenge-format data.
 
-Everything here shares one set of inputs with the parity tests: the committed
-synthetic fixtures under `data/`, loaded through the public
-`motrics.load_motchallenge` reader — the same reader used for real MOTChallenge
-sequences. So parity and benchmarking run on identical, MOTChallenge-format
-inputs rather than two separate synthetic generators.
+Everything here shares one set of inputs with the parity tests: the synthetic
+fixtures under `data/`, loaded through the public `motrics.load_motchallenge`
+reader — the same reader used for real MOTChallenge sequences. So parity and
+benchmarking run on identical, MOTChallenge-format inputs rather than two
+separate synthetic generators.
 
 ## Layout
 
 ```text
 benchmarks/
   fixtures.py            # dataset discovery + loading (shared)
-  generate_fixtures.py   # (re)generate the committed synthetic fixtures
+  generate_fixtures.py   # (re)generate the synthetic fixtures
   benchmark.py           # parity + timing runner
   download.py            # fetch real MOTChallenge sequences (needs network)
-  data/                  # committed synthetic fixtures (offline baseline)
+  data/                  # generated, git-ignored (not committed)
     <sequence>/gt/gt.txt
     <sequence>/pred.txt
-    real/                # real sequences land here (git-ignored, opt-in)
+    real/                # real sequences land here (opt-in)
 ```
 
 A *dataset* is a directory of sequence folders, each with `gt/gt.txt` and
 `pred.txt`. `benchmark.py` uses `data/real/` when it is present and falls back
-to the synthetic fixtures otherwise.
+to the synthetic fixtures otherwise. The synthetic fixtures are **git-ignored
+and generated on demand** — `benchmark.py` (and the parity tests) create them
+automatically, or run `generate_fixtures.py` yourself.
 
 ## Running
 

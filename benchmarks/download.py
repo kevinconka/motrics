@@ -19,7 +19,7 @@ results submission), matching sequences by name.
 Network access to ``motchallenge.net`` is required and must be permitted by the
 environment's egress policy — it is blocked in the default sandbox, so run this
 in CI or a permissioned local session. Nothing here is imported by the tests;
-they fall back to the committed synthetic fixtures when ``real/`` is absent.
+they fall back to the generated synthetic fixtures when ``real/`` is absent.
 
 Examples::
 
