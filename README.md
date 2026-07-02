@@ -54,7 +54,7 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 ## Roadmap
 
 - [x] Project scaffolding (build, lint, packaging, CI)
-- [ ] Bounding-box IoU + assignment (Hungarian/greedy) primitives
+- [x] Bounding-box IoU + assignment (Hungarian/greedy) primitives
 - [ ] CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
 - [ ] Identity metrics (IDF1 / IDP / IDR)
 - [ ] HOTA (DetA, AssA, alpha sweep)
