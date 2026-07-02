@@ -7,9 +7,11 @@ This package re-exports the public API so users only ever import from
 
 from motrics._motrics import (
     ClearMetrics,
+    IdentityMetrics,
     Matching,
     __version__,
     compute_clear,
+    compute_identity,
     iou,
     iou_matrix,
     match_boxes,
@@ -18,9 +20,11 @@ from motrics._motrics import (
 
 __all__ = [
     "ClearMetrics",
+    "IdentityMetrics",
     "Matching",
     "__version__",
     "compute_clear",
+    "compute_identity",
     "iou",
     "iou_matrix",
     "match_boxes",

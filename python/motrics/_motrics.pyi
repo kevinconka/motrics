@@ -106,3 +106,59 @@ def compute_clear(
     and within each frame the id and box lists must have equal length.
     """
     ...
+
+class IdentityMetrics:
+    """Accumulated Identity metrics (IDF1/IDP/IDR) over a sequence."""
+
+    @property
+    def idf1(self) -> float:
+        """Identity F1: ``IDTP / (IDTP + 0.5 IDFP + 0.5 IDFN)``."""
+
+    @property
+    def idp(self) -> float:
+        """Identity precision: ``IDTP / (IDTP + IDFP)``."""
+
+    @property
+    def idr(self) -> float:
+        """Identity recall: ``IDTP / (IDTP + IDFN)``."""
+
+    @property
+    def idtp(self) -> int:
+        """Identity true positives."""
+
+    @property
+    def idfp(self) -> int:
+        """Identity false positives."""
+
+    @property
+    def idfn(self) -> int:
+        """Identity false negatives."""
+
+    @property
+    def num_frames(self) -> int:
+        """Number of frames processed."""
+
+    @property
+    def num_gt(self) -> int:
+        """Total ground-truth detections across all frames."""
+
+    @property
+    def num_pred(self) -> int:
+        """Total predicted detections across all frames."""
+
+    def __repr__(self) -> str: ...
+
+def compute_identity(
+    gt_ids: Sequence[Sequence[int]],
+    gt_boxes: Sequence[Sequence[Bbox]],
+    pred_ids: Sequence[Sequence[int]],
+    pred_boxes: Sequence[Sequence[Bbox]],
+    iou_threshold: float = 0.5,
+) -> IdentityMetrics:
+    """Compute Identity metrics (IDF1, IDP, IDR) for a sequence.
+
+    Inputs are frame-aligned exactly like :func:`compute_clear`. Identity metrics
+    use a single global bipartite matching between whole ground-truth and
+    predicted trajectories, rewarding id consistency over time.
+    """
+    ...
