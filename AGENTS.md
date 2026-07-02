@@ -69,6 +69,16 @@ uv run pytest
 - **Minimum Python: 3.10.** Wheels are `abi3-py310` (one wheel covers 3.10+).
 - **Version** is sourced from `Cargo.toml` — bump it there, not in
   `pyproject.toml` (which declares `version` as dynamic).
+- **Prefer well-maintained existing libraries over re-implementing
+  algorithms.** Before hand-rolling a non-trivial algorithm (assignment
+  solvers, graph/geometry routines, numerical kernels, ...), check crates.io
+  for an established crate. Vet it first — recent activity, downloads, a
+  compatible license (MIT/Apache-2.0), and a sane dependency tail — and prefer
+  one that matches the reference implementation we validate against (e.g. we
+  use `lsap`, a port of SciPy's `linear_sum_assignment`, for optimal matching).
+  Only re-implement when nothing suitable exists, the dependency cost clearly
+  outweighs the benefit (e.g. IoU is ~15 lines and needs no crate), or a crate
+  is unmaintained/incompatible — and say so in the PR.
 - New Rust functions exposed to Python must also get an entry in
   `python/motrics/_motrics.pyi` and be re-exported from `__init__.py`.
 - Follow existing style: Rust idioms per `clippy`, Python per `ruff` + `ty`.
