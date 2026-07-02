@@ -1,0 +1,25 @@
+[package]
+name = "motrics"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.74"
+description = "An extremely fast MOT and HOTA metrics library, written in Rust."
+authors = ["Kevin Serrano"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/kevinconka/motrics"
+keywords = ["mot", "hota", "tracking", "metrics", "computer-vision"]
+categories = ["science", "computer-vision"]
+
+# The compiled extension module lives behind the `motrics` Python package as
+# `motrics._motrics`. Keeping it private is the Polars/pydantic-core convention.
+[lib]
+name = "_motrics"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.29", features = ["abi3-py310", "extension-module"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
