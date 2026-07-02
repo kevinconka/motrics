@@ -9,10 +9,59 @@ use pyo3::prelude::*;
 
 mod assignment;
 mod clear;
+mod identity;
 mod iou;
 
 use assignment::Method;
 use iou::Bbox;
+
+/// Validate frame-aligned inputs and borrow them as a slice of [`clear::Frame`].
+///
+/// Shared by the sequence metrics (`compute_clear`, `compute_identity`).
+fn build_frames<'a>(
+    gt_ids: &'a [Vec<i64>],
+    gt_boxes: &'a [Vec<Bbox>],
+    pred_ids: &'a [Vec<i64>],
+    pred_boxes: &'a [Vec<Bbox>],
+) -> PyResult<Vec<clear::Frame<'a>>> {
+    if gt_ids.len() != pred_ids.len() {
+        return Err(PyValueError::new_err(format!(
+            "gt and pred must have the same number of frames, got {} and {}",
+            gt_ids.len(),
+            pred_ids.len()
+        )));
+    }
+    if gt_ids.len() != gt_boxes.len() || pred_ids.len() != pred_boxes.len() {
+        return Err(PyValueError::new_err(
+            "ids and boxes must have the same number of frames",
+        ));
+    }
+
+    let mut frames = Vec::with_capacity(gt_ids.len());
+    for i in 0..gt_ids.len() {
+        if gt_ids[i].len() != gt_boxes[i].len() {
+            return Err(PyValueError::new_err(format!(
+                "frame {i}: gt_ids and gt_boxes length mismatch ({} vs {})",
+                gt_ids[i].len(),
+                gt_boxes[i].len()
+            )));
+        }
+        if pred_ids[i].len() != pred_boxes[i].len() {
+            return Err(PyValueError::new_err(format!(
+                "frame {i}: pred_ids and pred_boxes length mismatch ({} vs {})",
+                pred_ids[i].len(),
+                pred_boxes[i].len()
+            )));
+        }
+        frames.push(clear::Frame {
+            gt_ids: &gt_ids[i],
+            gt_boxes: &gt_boxes[i],
+            pred_ids: &pred_ids[i],
+            pred_boxes: &pred_boxes[i],
+        });
+    }
+    Ok(frames)
+}
 
 /// Return the version of the compiled Rust core.
 ///
@@ -162,43 +211,7 @@ fn compute_clear(
     pred_boxes: Vec<Vec<Bbox>>,
     iou_threshold: f64,
 ) -> PyResult<ClearMetrics> {
-    if gt_ids.len() != pred_ids.len() {
-        return Err(PyValueError::new_err(format!(
-            "gt and pred must have the same number of frames, got {} and {}",
-            gt_ids.len(),
-            pred_ids.len()
-        )));
-    }
-    if gt_ids.len() != gt_boxes.len() || pred_ids.len() != pred_boxes.len() {
-        return Err(PyValueError::new_err(
-            "ids and boxes must have the same number of frames",
-        ));
-    }
-
-    let mut frames = Vec::with_capacity(gt_ids.len());
-    for i in 0..gt_ids.len() {
-        if gt_ids[i].len() != gt_boxes[i].len() {
-            return Err(PyValueError::new_err(format!(
-                "frame {i}: gt_ids and gt_boxes length mismatch ({} vs {})",
-                gt_ids[i].len(),
-                gt_boxes[i].len()
-            )));
-        }
-        if pred_ids[i].len() != pred_boxes[i].len() {
-            return Err(PyValueError::new_err(format!(
-                "frame {i}: pred_ids and pred_boxes length mismatch ({} vs {})",
-                pred_ids[i].len(),
-                pred_boxes[i].len()
-            )));
-        }
-        frames.push(clear::Frame {
-            gt_ids: &gt_ids[i],
-            gt_boxes: &gt_boxes[i],
-            pred_ids: &pred_ids[i],
-            pred_boxes: &pred_boxes[i],
-        });
-    }
-
+    let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
     let m = clear::compute_clear(&frames, iou_threshold);
     Ok(ClearMetrics {
         mota: m.mota,
@@ -212,6 +225,77 @@ fn compute_clear(
     })
 }
 
+/// Accumulated Identity metrics (IDF1/IDP/IDR) over a sequence.
+#[pyclass(frozen)]
+struct IdentityMetrics {
+    /// Identity F1: `IDTP / (IDTP + 0.5 IDFP + 0.5 IDFN)`.
+    #[pyo3(get)]
+    idf1: f64,
+    /// Identity precision: `IDTP / (IDTP + IDFP)`.
+    #[pyo3(get)]
+    idp: f64,
+    /// Identity recall: `IDTP / (IDTP + IDFN)`.
+    #[pyo3(get)]
+    idr: f64,
+    /// Identity true positives.
+    #[pyo3(get)]
+    idtp: usize,
+    /// Identity false positives.
+    #[pyo3(get)]
+    idfp: usize,
+    /// Identity false negatives.
+    #[pyo3(get)]
+    idfn: usize,
+    /// Number of frames processed.
+    #[pyo3(get)]
+    num_frames: usize,
+    /// Total ground-truth detections across all frames.
+    #[pyo3(get)]
+    num_gt: usize,
+    /// Total predicted detections across all frames.
+    #[pyo3(get)]
+    num_pred: usize,
+}
+
+#[pymethods]
+impl IdentityMetrics {
+    fn __repr__(&self) -> String {
+        format!(
+            "IdentityMetrics(idf1={:.4}, idp={:.4}, idr={:.4}, idtp={}, idfp={}, idfn={})",
+            self.idf1, self.idp, self.idr, self.idtp, self.idfp, self.idfn,
+        )
+    }
+}
+
+/// Compute Identity metrics (IDF1, IDP, IDR) for a sequence.
+///
+/// Inputs are frame-aligned exactly like [`compute_clear`]. Identity metrics use
+/// a single global bipartite matching between whole ground-truth and predicted
+/// trajectories, so id consistency over time is rewarded.
+#[pyfunction]
+#[pyo3(signature = (gt_ids, gt_boxes, pred_ids, pred_boxes, iou_threshold=0.5))]
+fn compute_identity(
+    gt_ids: Vec<Vec<i64>>,
+    gt_boxes: Vec<Vec<Bbox>>,
+    pred_ids: Vec<Vec<i64>>,
+    pred_boxes: Vec<Vec<Bbox>>,
+    iou_threshold: f64,
+) -> PyResult<IdentityMetrics> {
+    let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
+    let m = identity::compute_identity(&frames, iou_threshold);
+    Ok(IdentityMetrics {
+        idf1: m.idf1,
+        idp: m.idp,
+        idr: m.idr,
+        idtp: m.idtp,
+        idfp: m.idfp,
+        idfn: m.idfn,
+        num_frames: m.num_frames,
+        num_gt: m.num_gt,
+        num_pred: m.num_pred,
+    })
+}
+
 /// The `motrics._motrics` extension module.
 #[pymodule]
 fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -221,7 +305,9 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(iou_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(match_boxes, m)?)?;
     m.add_function(wrap_pyfunction!(compute_clear, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_identity, m)?)?;
     m.add_class::<Matching>()?;
     m.add_class::<ClearMetrics>()?;
+    m.add_class::<IdentityMetrics>()?;
     Ok(())
 }

@@ -56,7 +56,7 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 - [x] Project scaffolding (build, lint, packaging, CI)
 - [x] Bounding-box IoU + assignment (Hungarian/greedy) primitives
 - [x] CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
-- [ ] Identity metrics (IDF1 / IDP / IDR)
+- [x] Identity metrics (IDF1 / IDP / IDR)
 - [ ] HOTA (DetA, AssA, alpha sweep)
 - [ ] MOTChallenge / TrackEval ingest + parity tests
 
