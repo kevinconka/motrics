@@ -57,7 +57,7 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 - [x] Bounding-box IoU + assignment (Hungarian/greedy) primitives
 - [x] CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
 - [x] Identity metrics (IDF1 / IDP / IDR)
-- [ ] HOTA (DetA, AssA, alpha sweep)
+- [x] HOTA (DetA, AssA, alpha sweep)
 - [ ] MOTChallenge / TrackEval ingest + parity tests
 
 ## License
