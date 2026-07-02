@@ -46,3 +46,8 @@ dev = [
     "ruff>=0.9",
     "ty>=0.0.1a1",
 ]
+parity = [
+    "numpy>=2.2.6",
+    "scipy>=1.15.3",
+    "trackeval>=1.3.0",
+]

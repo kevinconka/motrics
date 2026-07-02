@@ -61,3 +61,22 @@ jobs:
         run: uv run ty check
       - name: pytest
         run: uv run pytest
+
+  parity:
+    name: TrackEval parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Sync dev + parity dependencies
+        run: uv sync --group dev --group parity
+      - name: Build extension into the venv
+        run: uv run maturin develop --uv
+      - name: pytest (parity vs TrackEval)
+        run: uv run pytest tests/test_parity.py -v
