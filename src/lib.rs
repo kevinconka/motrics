@@ -9,6 +9,7 @@ use pyo3::prelude::*;
 
 mod assignment;
 mod clear;
+mod hota;
 mod identity;
 mod iou;
 
@@ -296,6 +297,83 @@ fn compute_identity(
     })
 }
 
+/// HOTA metrics over a sequence (summarised, with per-alpha curves retained).
+#[pyclass(frozen)]
+struct HotaMetrics {
+    /// HOTA score: mean over alpha of `sqrt(DetA * AssA)`.
+    #[pyo3(get)]
+    hota: f64,
+    /// Detection accuracy: mean over alpha.
+    #[pyo3(get)]
+    deta: f64,
+    /// Association accuracy: mean over alpha.
+    #[pyo3(get)]
+    assa: f64,
+    /// Localization accuracy: mean over alpha.
+    #[pyo3(get)]
+    loca: f64,
+    /// The alpha (localization) thresholds swept.
+    #[pyo3(get)]
+    alphas: Vec<f64>,
+    /// Per-alpha HOTA scores, parallel to `alphas`.
+    #[pyo3(get)]
+    hota_alphas: Vec<f64>,
+    /// Per-alpha DetA scores, parallel to `alphas`.
+    #[pyo3(get)]
+    deta_alphas: Vec<f64>,
+    /// Per-alpha AssA scores, parallel to `alphas`.
+    #[pyo3(get)]
+    assa_alphas: Vec<f64>,
+    /// Number of frames processed.
+    #[pyo3(get)]
+    num_frames: usize,
+    /// Total ground-truth detections across all frames.
+    #[pyo3(get)]
+    num_gt: usize,
+    /// Total predicted detections across all frames.
+    #[pyo3(get)]
+    num_pred: usize,
+}
+
+#[pymethods]
+impl HotaMetrics {
+    fn __repr__(&self) -> String {
+        format!(
+            "HotaMetrics(hota={:.4}, deta={:.4}, assa={:.4}, loca={:.4})",
+            self.hota, self.deta, self.assa, self.loca,
+        )
+    }
+}
+
+/// Compute HOTA metrics (DetA, AssA, LocA, plus per-alpha curves) for a sequence.
+///
+/// Inputs are frame-aligned exactly like [`compute_clear`]. HOTA sweeps a set of
+/// localization thresholds internally, so unlike the other metrics it takes no
+/// single `iou_threshold`.
+#[pyfunction]
+fn compute_hota(
+    gt_ids: Vec<Vec<i64>>,
+    gt_boxes: Vec<Vec<Bbox>>,
+    pred_ids: Vec<Vec<i64>>,
+    pred_boxes: Vec<Vec<Bbox>>,
+) -> PyResult<HotaMetrics> {
+    let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
+    let m = hota::compute_hota(&frames);
+    Ok(HotaMetrics {
+        hota: m.hota,
+        deta: m.deta,
+        assa: m.assa,
+        loca: m.loca,
+        alphas: m.alphas,
+        hota_alphas: m.hota_alphas,
+        deta_alphas: m.deta_alphas,
+        assa_alphas: m.assa_alphas,
+        num_frames: m.num_frames,
+        num_gt: m.num_gt,
+        num_pred: m.num_pred,
+    })
+}
+
 /// The `motrics._motrics` extension module.
 #[pymodule]
 fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -306,8 +384,10 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(match_boxes, m)?)?;
     m.add_function(wrap_pyfunction!(compute_clear, m)?)?;
     m.add_function(wrap_pyfunction!(compute_identity, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_hota, m)?)?;
     m.add_class::<Matching>()?;
     m.add_class::<ClearMetrics>()?;
     m.add_class::<IdentityMetrics>()?;
+    m.add_class::<HotaMetrics>()?;
     Ok(())
 }

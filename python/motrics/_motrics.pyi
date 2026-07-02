@@ -162,3 +162,66 @@ def compute_identity(
     predicted trajectories, rewarding id consistency over time.
     """
     ...
+
+class HotaMetrics:
+    """HOTA metrics over a sequence (summarised, with per-alpha curves)."""
+
+    @property
+    def hota(self) -> float:
+        """HOTA score: mean over alpha of ``sqrt(DetA * AssA)``."""
+
+    @property
+    def deta(self) -> float:
+        """Detection accuracy: mean over alpha."""
+
+    @property
+    def assa(self) -> float:
+        """Association accuracy: mean over alpha."""
+
+    @property
+    def loca(self) -> float:
+        """Localization accuracy: mean over alpha."""
+
+    @property
+    def alphas(self) -> list[float]:
+        """The alpha (localization) thresholds swept."""
+
+    @property
+    def hota_alphas(self) -> list[float]:
+        """Per-alpha HOTA scores, parallel to ``alphas``."""
+
+    @property
+    def deta_alphas(self) -> list[float]:
+        """Per-alpha DetA scores, parallel to ``alphas``."""
+
+    @property
+    def assa_alphas(self) -> list[float]:
+        """Per-alpha AssA scores, parallel to ``alphas``."""
+
+    @property
+    def num_frames(self) -> int:
+        """Number of frames processed."""
+
+    @property
+    def num_gt(self) -> int:
+        """Total ground-truth detections across all frames."""
+
+    @property
+    def num_pred(self) -> int:
+        """Total predicted detections across all frames."""
+
+    def __repr__(self) -> str: ...
+
+def compute_hota(
+    gt_ids: Sequence[Sequence[int]],
+    gt_boxes: Sequence[Sequence[Bbox]],
+    pred_ids: Sequence[Sequence[int]],
+    pred_boxes: Sequence[Sequence[Bbox]],
+) -> HotaMetrics:
+    """Compute HOTA metrics (DetA, AssA, LocA, plus per-alpha curves).
+
+    Inputs are frame-aligned exactly like :func:`compute_clear`. HOTA sweeps a
+    set of localization thresholds internally, so unlike the other metrics it
+    takes no single ``iou_threshold``.
+    """
+    ...
