@@ -7,9 +7,9 @@ An extremely fast MOT and HOTA metrics library, written in Rust.
 bindings.
 
 > **Status:** the core metric families — CLEAR, Identity, and HOTA — are
-> implemented on a shared IoU + assignment layer, with MOTChallenge ingest.
-> Bit-exact TrackEval parity on full benchmark sequences is the remaining
-> validation work. See the roadmap below.
+> implemented on a shared IoU + assignment layer, with MOTChallenge ingest and
+> numeric parity tests against [TrackEval](https://github.com/JonathonLuiten/TrackEval).
+> See the roadmap below.
 
 ## Install (from source)
 
@@ -82,7 +82,7 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 - [x] Identity metrics (IDF1 / IDP / IDR)
 - [x] HOTA (DetA, AssA, alpha sweep)
 - [x] MOTChallenge ingest + integration tests
-- [ ] Full TrackEval numeric parity on benchmark sequences
+- [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
 
 ## License
 
