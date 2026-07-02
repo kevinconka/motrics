@@ -97,16 +97,17 @@ uv run python benchmarks/benchmark.py            # auto-detects data/real/
 
 Results are validated for **numeric parity** against both references (a hard CI
 gate) before any timing is reported. On a release build, over the three
-synthetic fixtures (30 / 150 / 500 frames; up to ~9k detections):
+synthetic fixtures (30 / 150 / 500 frames; up to ~9k detections), **how much
+faster motrics is** than each reference:
 
-| Engine        | CLEAR + Identity | Full pipeline (incl. HOTA) |
-| ------------- | ---------------- | -------------------------- |
-| **motrics**   | **1.0×** (baseline) | **1.0×** (baseline)     |
-| TrackEval     | ~6× slower       | ~13× slower                |
-| py-motmetrics | ~27× slower      | — (no HOTA)                |
+| motrics vs…   | CLEAR + Identity | Full pipeline (with HOTA) |
+| ------------- | ---------------- | ------------------------- |
+| TrackEval     | **~6× faster**   | **~13× faster**           |
+| py-motmetrics | **~27× faster**  | _n/a — no HOTA_           |
 
-Ratios are illustrative and machine-dependent; this is a conservative,
-metrics-only comparison (TrackEval is handed pre-aligned arrays). See
+Numbers are illustrative and machine-dependent; this is a conservative,
+metrics-only comparison (TrackEval is handed pre-aligned arrays, so real-world
+gains are typically larger). See
 [`benchmarks/README.md`](benchmarks/README.md) for methodology and flags.
 
 ## Roadmap
