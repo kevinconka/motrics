@@ -1,0 +1,48 @@
+[build-system]
+requires = ["maturin>=1.9,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "motrics"
+description = "An extremely fast MOT and HOTA metrics library, written in Rust."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Kevin Serrano" }]
+keywords = ["mot", "hota", "tracking", "metrics", "computer-vision"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Typing :: Typed",
+]
+# Version is sourced from Cargo.toml by maturin (see [tool.maturin] below).
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/kevinconka/motrics"
+Repository = "https://github.com/kevinconka/motrics"
+Issues = "https://github.com/kevinconka/motrics/issues"
+
+[tool.maturin]
+# Mixed Rust/Python layout: pure-Python sources live under python/, the compiled
+# extension is exposed as the private `motrics._motrics` module.
+python-source = "python"
+module-name = "motrics._motrics"
+features = ["pyo3/extension-module"]
+
+[dependency-groups]
+dev = [
+    "maturin>=1.9,<2.0",
+    "pytest>=8.0",
+    "ruff>=0.9",
+    "ty>=0.0.1a1",
+]

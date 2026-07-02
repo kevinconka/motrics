@@ -1,0 +1,8 @@
+[environment]
+python-version = "3.10"
+
+[src]
+include = ["python", "tests"]
+
+[rules]
+# The extension module is a compiled binary; ty resolves it via the .pyi stub.
