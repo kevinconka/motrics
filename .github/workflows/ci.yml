@@ -80,3 +80,26 @@ jobs:
         run: uv run maturin develop --uv
       - name: pytest (parity vs TrackEval)
         run: uv run pytest tests/test_parity.py -v
+
+  benchmark:
+    name: Benchmark (parity + speed, fixtures)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Sync dev + parity dependencies
+        run: uv sync --group dev --group parity
+      # Release build — a debug build is ~10x slower and the timings would be
+      # meaningless (the benchmark warns loudly if it detects a debug build).
+      - name: Build extension (release) into the venv
+        run: uv run maturin develop --release --uv
+      # Runs on the committed synthetic fixtures (no network). Fails on any
+      # numeric parity mismatch across motrics / TrackEval / py-motmetrics.
+      - name: Benchmark on fixtures (parity gate + timing)
+        run: uv run python benchmarks/benchmark.py --repeats 3

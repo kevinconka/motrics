@@ -74,6 +74,29 @@ uv run maturin develop && uv run pytest
 
 Optional: `pre-commit install` to run the formatters/linters on every commit.
 
+### Benchmarks
+
+The `benchmarks/` suite validates numeric parity and measures speed against
+[TrackEval](https://github.com/JonathonLuiten/TrackEval) and
+[py-motmetrics](https://github.com/cheind/py-motmetrics) on shared
+MOTChallenge-format sequences:
+
+```bash
+uv sync --group parity && uv run maturin develop --release --uv  # release build!
+uv run python benchmarks/benchmark.py            # committed synthetic fixtures
+```
+
+It runs on committed fixtures out of the box (offline, reproducible). For real
+MOTChallenge sequences, fetch them first (needs network + accepting the dataset
+license) and rerun:
+
+```bash
+uv run python benchmarks/download.py --dataset MOT15
+uv run python benchmarks/benchmark.py            # auto-detects data/real/
+```
+
+See [`benchmarks/README.md`](benchmarks/README.md) for methodology and flags.
+
 ## Roadmap
 
 - [x] Project scaffolding (build, lint, packaging, CI)
@@ -83,11 +106,19 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 - [x] HOTA (DetA, AssA, alpha sweep)
 - [x] MOTChallenge ingest + integration tests
 - [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
-- [ ] Real-data benchmark & parity — unify parity/benchmark on shared
-      MOTChallenge-format fixtures, commit a reproducible `benchmarks/`, and
-      validate parity + measure speedups on real MOTChallenge sequences
-      (needs network access to download the dataset; unavailable in the current
-      sandbox but works in CI/local)
+- [x] Benchmark & parity infrastructure — parity and benchmarks now share
+      MOTChallenge-format fixtures (`benchmarks/data/`, loaded through
+      `motrics.load_motchallenge`); a reproducible `benchmarks/` suite validates
+      numeric parity against **TrackEval** and **py-motmetrics** and measures
+      speedups, running on the committed fixtures in CI. See
+      [`benchmarks/README.md`](benchmarks/README.md).
+  - [ ] Speedup/parity numbers on **real** MOTChallenge sequences — fetch with
+        `benchmarks/download.py`, then rerun the suite. Needs network access to
+        `motchallenge.net` (blocked in the dev sandbox; available in CI or a
+        permissioned local session).
+  - [ ] Zero-copy NumPy input path — the current API takes Python lists and
+        recomputes IoU per metric call; accepting arrays and sharing one
+        similarity matrix across metrics is the next perf lever.
 
 ## License
 

@@ -46,8 +46,12 @@ dev = [
     "ruff>=0.9",
     "ty>=0.0.1a1",
 ]
+# Reference MOT evaluators used by both the parity tests and the benchmark
+# suite (TrackEval for tight numeric parity; py-motmetrics as a second engine in
+# the benchmark's cross-engine parity + speed comparison).
 parity = [
     "numpy>=2.2.6",
     "scipy>=1.15.3",
     "trackeval>=1.3.0",
+    "motmetrics>=1.4.0",
 ]

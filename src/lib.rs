@@ -73,6 +73,17 @@ fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// Whether the extension was compiled with debug assertions.
+///
+/// A debug build is roughly an order of magnitude slower than a release build,
+/// so any performance measurement (see `benchmarks/`) should run against a
+/// release build (`maturin develop --release`). This lets callers detect and
+/// warn about an unoptimized build.
+#[pyfunction]
+fn is_debug_build() -> bool {
+    cfg!(debug_assertions)
+}
+
 /// Intersection-over-union of two `xyxy` boxes `(x1, y1, x2, y2)`.
 #[pyfunction]
 #[pyo3(name = "iou")]
@@ -379,6 +390,7 @@ fn compute_hota(
 fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
+    m.add_function(wrap_pyfunction!(is_debug_build, m)?)?;
     m.add_function(wrap_pyfunction!(iou_py, m)?)?;
     m.add_function(wrap_pyfunction!(iou_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(match_boxes, m)?)?;

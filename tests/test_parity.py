@@ -9,6 +9,7 @@ metric-math discrepancy. Skipped automatically where TrackEval isn't installed
 from __future__ import annotations
 
 import random
+from pathlib import Path
 
 import motrics
 import pytest
@@ -95,10 +96,41 @@ _HANDBUILT: list[list[Frame]] = [
     ],
 ]
 
-SEQUENCES = _HANDBUILT + [_random_sequence(s) for s in range(6)]
+# Shared MOTChallenge-format fixtures — the *same* committed sequences the
+# benchmark suite measures (benchmarks/data). Loading them here through the
+# public reader means parity is validated on the exact inputs we benchmark,
+# rather than on a separate synthetic generator.
+_FIXTURES_DIR = Path(__file__).parents[1] / "benchmarks" / "data"
 
 
-@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: f"{len(s)}frames")
+def _load_fixture(seq_dir: Path) -> list[Frame]:
+    gt = motrics.load_motchallenge(seq_dir / "gt" / "gt.txt")
+    pred = motrics.load_motchallenge(seq_dir / "pred.txt")
+    gt_ids, gt_boxes, pred_ids, pred_boxes = motrics.align_frames(gt, pred)
+    return [
+        (gt_ids[t], gt_boxes[t], pred_ids[t], pred_boxes[t]) for t in range(len(gt_ids))
+    ]
+
+
+_FIXTURE_DIRS = (
+    sorted(p for p in _FIXTURES_DIR.iterdir() if (p / "gt" / "gt.txt").is_file())
+    if _FIXTURES_DIR.exists()
+    else []
+)
+
+SEQUENCES = (
+    _HANDBUILT
+    + [_random_sequence(s) for s in range(6)]
+    + [_load_fixture(p) for p in _FIXTURE_DIRS]
+)
+SEQUENCE_IDS = (
+    [f"handbuilt{i}" for i in range(len(_HANDBUILT))]
+    + [f"random{i}" for i in range(6)]
+    + [f"fixture-{p.name}" for p in _FIXTURE_DIRS]
+)
+
+
+@pytest.mark.parametrize("seq", SEQUENCES, ids=SEQUENCE_IDS)
 def test_clear_parity(seq: list[Frame]) -> None:
     ref = te_clear({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
         _build_trackeval_data(seq)
@@ -112,7 +144,7 @@ def test_clear_parity(seq: list[Frame]) -> None:
     assert m.motp == pytest.approx(ref["MOTP"], abs=1e-9)
 
 
-@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: f"{len(s)}frames")
+@pytest.mark.parametrize("seq", SEQUENCES, ids=SEQUENCE_IDS)
 def test_identity_parity(seq: list[Frame]) -> None:
     ref = te_identity({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
         _build_trackeval_data(seq)
@@ -126,7 +158,7 @@ def test_identity_parity(seq: list[Frame]) -> None:
     assert m.idr == pytest.approx(ref["IDR"], abs=1e-9)
 
 
-@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: f"{len(s)}frames")
+@pytest.mark.parametrize("seq", SEQUENCES, ids=SEQUENCE_IDS)
 def test_hota_parity(seq: list[Frame]) -> None:
     ref = te_hota({"PRINT_CONFIG": False}).eval_sequence(_build_trackeval_data(seq))
     m = motrics.compute_hota(*_motrics_args(seq))
