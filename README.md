@@ -83,6 +83,11 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 - [x] HOTA (DetA, AssA, alpha sweep)
 - [x] MOTChallenge ingest + integration tests
 - [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
+- [ ] Real-data benchmark & parity — unify parity/benchmark on shared
+      MOTChallenge-format fixtures, commit a reproducible `benchmarks/`, and
+      validate parity + measure speedups on real MOTChallenge sequences
+      (needs network access to download the dataset; unavailable in the current
+      sandbox but works in CI/local)
 
 ## License
 
