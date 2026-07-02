@@ -3,9 +3,10 @@
 //! Given an IoU matrix, [`match_boxes`] pairs rows (set A) to columns (set B)
 //! subject to an IoU threshold. Two strategies are provided:
 //!
-//! * [`Method::Hungarian`] — optimal assignment maximising total IoU
-//!   (Kuhn–Munkres). This mirrors the `linear_sum_assignment` approach used by
-//!   TrackEval / py-motmetrics.
+//! * [`Method::Hungarian`] — optimal assignment maximising total IoU. The heavy
+//!   lifting is delegated to the [`lsap`] crate, a Rust port of SciPy's
+//!   `linear_sum_assignment` (Jonker–Volgenant). This is the same solver used by
+//!   TrackEval / py-motmetrics, which keeps our numbers aligned with theirs.
 //! * [`Method::Greedy`] — assign the highest-IoU pairs first; fast, but not
 //!   guaranteed optimal.
 
@@ -29,107 +30,38 @@ pub struct MatchResult {
     pub unmatched_b: Vec<usize>,
 }
 
-/// Solve the assignment problem on a square cost matrix, minimising total cost.
+/// Match set A (rows) to set B (columns) with an optimal linear-sum assignment.
 ///
-/// Returns `assignment` where `assignment[row] = col`. Uses the O(n^3)
-/// Hungarian algorithm with potentials (the e-maxx formulation adapted to
-/// `f64`). The matrix must be square and non-empty.
-fn hungarian_square(cost: &[Vec<f64>]) -> Vec<usize> {
-    let n = cost.len();
-    let inf = f64::INFINITY;
-
-    // All vectors are 1-indexed; index 0 is a sentinel row/column.
-    let mut u = vec![0.0f64; n + 1];
-    let mut v = vec![0.0f64; n + 1];
-    let mut p = vec![0usize; n + 1]; // p[j] = row assigned to column j (0 = none)
-    let mut way = vec![0usize; n + 1];
-
-    for i in 1..=n {
-        p[0] = i;
-        let mut j0 = 0usize;
-        let mut minv = vec![inf; n + 1];
-        let mut used = vec![false; n + 1];
-
-        loop {
-            used[j0] = true;
-            let i0 = p[j0];
-            let mut delta = inf;
-            let mut j1 = 0usize;
-
-            for j in 1..=n {
-                if !used[j] {
-                    let cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
-                    if cur < minv[j] {
-                        minv[j] = cur;
-                        way[j] = j0;
-                    }
-                    if minv[j] < delta {
-                        delta = minv[j];
-                        j1 = j;
-                    }
-                }
-            }
-
-            for j in 0..=n {
-                if used[j] {
-                    u[p[j]] += delta;
-                    v[j] -= delta;
-                } else {
-                    minv[j] -= delta;
-                }
-            }
-
-            j0 = j1;
-            if p[j0] == 0 {
-                break;
-            }
-        }
-
-        // Augment along the alternating path.
-        loop {
-            let j1 = way[j0];
-            p[j0] = p[j1];
-            j0 = j1;
-            if j0 == 0 {
-                break;
-            }
-        }
-    }
-
-    let mut assignment = vec![usize::MAX; n];
-    for j in 1..=n {
-        if p[j] != 0 {
-            assignment[p[j] - 1] = j - 1;
-        }
-    }
-    assignment
-}
-
-/// Match set A (rows) to set B (columns) using the Hungarian algorithm.
-///
-/// The IoU matrix is padded to a square cost matrix (`cost = -iou`, padding
-/// cells `0.0`). After the optimal assignment is found, pairs with IoU below
-/// `threshold` are discarded, mirroring the standard MOT matching recipe.
+/// Feeds the IoU matrix to [`lsap::solve`] in maximise mode, then discards pairs
+/// with IoU below `threshold` (the standard MOT matching recipe). The solver
+/// handles rectangular matrices directly, so no padding is required.
 fn match_hungarian(iou: &[Vec<f64>], n_a: usize, n_b: usize, threshold: f64) -> MatchResult {
-    let n = n_a.max(n_b);
-    let mut cost = vec![vec![0.0f64; n]; n];
-    for (i, row) in iou.iter().enumerate() {
-        for (j, &score) in row.iter().enumerate() {
-            cost[i][j] = -score;
-        }
+    // Flatten to the row-major layout lsap expects: cost[i * n_b + j].
+    let mut flat = Vec::with_capacity(n_a * n_b);
+    for row in iou {
+        flat.extend_from_slice(row);
     }
 
-    let assignment = hungarian_square(&cost);
+    // IoU values are always finite in [0, 1], so lsap::solve cannot fail here.
+    let (rows, cols) =
+        lsap::solve(n_a, n_b, &flat, true).expect("finite IoU matrix is always solvable");
+
+    let mut pairs: Vec<(usize, usize)> = rows.into_iter().zip(cols).collect();
+    pairs.sort_by_key(|&(i, _)| i);
 
     let mut result = MatchResult::default();
+    let mut matched_a = vec![false; n_a];
     let mut matched_b = vec![false; n_b];
-    for i in 0..n_a {
-        let j = assignment[i];
-        if j < n_b && iou[i][j] >= threshold {
+    for (i, j) in pairs {
+        if iou[i][j] >= threshold {
             result.matches.push((i, j));
             result.scores.push(iou[i][j]);
+            matched_a[i] = true;
             matched_b[j] = true;
-        } else {
+        }
+    }
+    for (i, &used) in matched_a.iter().enumerate() {
+        if !used {
             result.unmatched_a.push(i);
         }
     }
@@ -223,7 +155,6 @@ mod tests {
 
     #[test]
     fn hungarian_finds_optimal_permutation() {
-        // Identity is clearly optimal here.
         let iou = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
         let r = match_boxes(&iou, 2, 2, 0.5, Method::Hungarian);
         assert_eq!(r.matches, vec![(0, 0), (1, 1)]);
