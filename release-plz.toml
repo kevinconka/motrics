@@ -1,0 +1,5 @@
+[workspace]
+# motrics is compiled into a Python extension, not published as a Rust
+# crate — release-plz should still bump the version, write the changelog,
+# and tag/release, just skip `cargo publish`.
+publish = false
