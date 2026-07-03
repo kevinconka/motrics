@@ -1,32 +1,55 @@
-"""Evaluate a MOTChallenge benchmark the way `TrackEval
-<https://github.com/JonathonLuiten/TrackEval>`_'s ``Evaluator`` +
-``MotChallenge2DBox`` does, without installing TrackEval::
+"""Drop-in for `TrackEval <https://github.com/JonathonLuiten/TrackEval>`_'s
+MOTChallenge evaluation API, backed by motrics' Rust core::
 
     import motrics.compat.trackeval as trackeval
 
-    results = trackeval.evaluate_mot_challenge(
-        {
-            "MOT17-02-FRCNN": ("data/MOT17-02/gt/gt.txt", "results/MOT17-02.txt"),
-            "MOT17-04-FRCNN": ("data/MOT17-04/gt/gt.txt", "results/MOT17-04.txt"),
-        }
-    )
-    print(results["COMBINED_SEQ"]["clear"]["mota"])
-    print(results["MOT17-02-FRCNN"]["hota"]["hota"])
+    eval_config = trackeval.Evaluator.get_default_eval_config()
+    evaluator = trackeval.Evaluator(eval_config)
 
-This is a small, functional subset of TrackEval's ``Evaluator``: one
-function, MOTChallenge only, no config dict, dataset-class plugin system, or
-file/plot output. Per-sequence ground truth is filtered through
-:func:`motrics.preprocess_motchallenge`, so per-sequence CLEAR/Identity/HOTA
-match TrackEval's own numbers. ``COMBINED_SEQ`` CLEAR and Identity are exact
-re-aggregations from summed counts (as TrackEval's own ``combine_sequences``
-does); ``COMBINED_SEQ`` HOTA is a detection-count-weighted average of the
-per-sequence scores, since :class:`motrics.HotaMetrics` doesn't expose the
-raw per-alpha counts TrackEval's exact combination needs — close enough for
-tracking benchmark comparisons, but not bit-exact.
+    dataset_config = trackeval.datasets.MotChallenge2DBox.get_default_dataset_config()
+    dataset_config["GT_FOLDER"] = "data/gt/mot_challenge/"
+    dataset_config["TRACKERS_FOLDER"] = "data/trackers/mot_challenge/"
+    dataset_list = [trackeval.datasets.MotChallenge2DBox(dataset_config)]
+
+    metrics_list = [
+        trackeval.metrics.HOTA(),
+        trackeval.metrics.CLEAR(),
+        trackeval.metrics.Identity(),
+    ]
+
+    results, messages = evaluator.evaluate(dataset_list, metrics_list)
+    print(
+        results["MotChallenge2DBox"]["my_tracker"]["COMBINED_SEQ"]["pedestrian"][
+            "CLEAR"
+        ]["MOTA"]
+    )
+
+Same class names, config keys, directory/seqmap conventions, and result shape
+(``results[dataset][tracker][seq_or_"COMBINED_SEQ"][cls][metric]["FIELD"]``) as
+real TrackEval — swap the import in an existing evaluation script and it
+should just work, no ``trackeval``/``scipy`` install required.
+
+What's NOT implemented (see each module's docstring for specifics):
+
+- ``Evaluator``: parallel evaluation, error-handling config
+  (``BREAK_ON_ERROR``/etc.), printing/file output/plotting. Always serial,
+  always raises immediately, never writes files.
+- ``datasets.MotChallenge2DBox``: zipped input (``INPUT_AS_ZIP``), classes
+  other than ``pedestrian`` (TrackEval's own MOT Challenge adapter is
+  pedestrian-only too, so this isn't a gap versus TrackEval itself).
+- ``metrics.CLEAR``: only ``MOTA``/``MOTP`` — not ``MT``/``PT``/``ML``/``Frag``/
+  ``MODA``/``sMOTA``/etc., which need mostly-tracked/lost and fragmentation
+  bookkeeping the Rust core doesn't compute yet.
+- ``metrics.{IDEucl,JAndF,TrackMAP,VACE}``: not implemented at all.
+
+``metrics.{HOTA,CLEAR,Identity}.eval_sequence``/``combine_sequences`` are
+verified bit-exact against real TrackEval (see ``tests/test_compat_trackeval.py``).
 """
 
 from __future__ import annotations
 
-from motrics.compat.trackeval.evaluate import evaluate_mot_challenge
+from motrics.compat.trackeval import datasets, metrics
+from motrics.compat.trackeval._utils import TrackEvalException
+from motrics.compat.trackeval.eval import Evaluator
 
-__all__ = ["evaluate_mot_challenge"]
+__all__ = ["Evaluator", "TrackEvalException", "datasets", "metrics"]

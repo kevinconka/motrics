@@ -85,32 +85,14 @@ summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="a
 
 ## Migrating from TrackEval
 
-Evaluate a MOTChallenge benchmark without installing TrackEval:
+Swap the import — the rest of your evaluation script is unchanged:
 
 ```python
-import motrics.compat.trackeval as trackeval
-
-results = trackeval.evaluate_mot_challenge({
-    "MOT17-02-FRCNN": ("data/MOT17-02/gt/gt.txt", "results/MOT17-02.txt"),
-    "MOT17-04-FRCNN": ("data/MOT17-04/gt/gt.txt", "results/MOT17-04.txt"),
-})
-print(results["COMBINED_SEQ"]["clear"]["mota"])
-print(results["MOT17-02-FRCNN"]["hota"]["hota"])
-```
-
-- A small, functional subset of TrackEval's `Evaluator`: one function,
-  MOTChallenge only — no config dict, dataset-class plugin system, or
-  file/plot output.
-- Per-sequence CLEAR/Identity/HOTA match TrackEval's own numbers
-  (preprocessing included). `COMBINED_SEQ` CLEAR/Identity are exact
-  re-aggregations from summed counts; `COMBINED_SEQ` HOTA is a
-  detection-weighted average, not TrackEval's exact per-alpha combination.
-
-<details>
-<summary>The original TrackEval code, for reference</summary>
-
-```python
+# before
 import trackeval
+
+# after — same code, motrics underneath
+import motrics.compat.trackeval as trackeval
 
 eval_config = trackeval.Evaluator.get_default_eval_config()
 evaluator = trackeval.Evaluator(eval_config)
@@ -118,21 +100,30 @@ evaluator = trackeval.Evaluator(eval_config)
 dataset_config = trackeval.datasets.MotChallenge2DBox.get_default_dataset_config()
 dataset_config["GT_FOLDER"] = "data/gt/mot_challenge/"
 dataset_config["TRACKERS_FOLDER"] = "data/trackers/mot_challenge/"
-dataset_config["BENCHMARK"] = "MOT17"
 dataset_list = [trackeval.datasets.MotChallenge2DBox(dataset_config)]
 
 metrics_list = [trackeval.metrics.HOTA(), trackeval.metrics.CLEAR(), trackeval.metrics.Identity()]
 
 results, messages = evaluator.evaluate(dataset_list, metrics_list)
+print(results["MotChallenge2DBox"]["my_tracker"]["COMBINED_SEQ"]["pedestrian"]["CLEAR"]["MOTA"])
 ```
 
-Needs `GT_FOLDER`/`TRACKERS_FOLDER` laid out exactly as
-`BENCHMARK-SPLIT_TO_EVAL/<seq>/gt/gt.txt` and
-`BENCHMARK-SPLIT_TO_EVAL/<tracker>/data/<seq>.txt`, plus a seqmap file
-listing which sequences to run — the directory-scanning/config machinery
-`evaluate_mot_challenge` skips.
+Same class names, config keys, directory/seqmap conventions
+(`GT_FOLDER/BENCHMARK-SPLIT/<seq>/gt/gt.txt`, a seqmap file, per-sequence
+`seqinfo.ini`), and result shape as real TrackEval — no `trackeval`/`scipy`
+install required. `HOTA`/`CLEAR`/`Identity` field values are verified
+bit-exact against real TrackEval.
 
-</details>
+- `pip install motrics[compat]` (pulls in numpy, needed only for this
+  subpackage — HOTA's per-alpha fields are numpy arrays, matching TrackEval).
+- Not implemented: parallel evaluation, error-handling config
+  (`BREAK_ON_ERROR`/etc. — always raises immediately), printing/file
+  output/plotting; zipped input (`INPUT_AS_ZIP`); `CLEAR` fields beyond
+  `MOTA`/`MOTP` (`MT`/`PT`/`ML`/`Frag`/`MODA`/`sMOTA`/etc. need
+  mostly-tracked/lost and fragmentation bookkeeping the Rust core doesn't
+  compute yet); `IDEucl`/`JAndF`/`TrackMAP`/`VACE` metrics.
+- See [`python/motrics/compat/trackeval/`](python/motrics/compat/trackeval/)
+  for the full list of what differs from real TrackEval.
 
 <details>
 <summary>Metric name map — TrackEval / py-motmetrics / motrics' native API</summary>
@@ -190,9 +181,11 @@ it yourself.
         removal, pedestrian-only, "do not consider" rows dropped) — validated
         against TrackEval's own `get_preprocessed_seq_data`, and now what the
         real-data benchmark uses. The enabling piece for `compat.trackeval`.
-  - [x] `motrics.compat.trackeval` — evaluate a MOTChallenge benchmark
-        (`evaluate_mot_challenge`) without installing TrackEval; a functional
-        subset of `Evaluator`, not a class-for-class clone (see above).
+  - [x] `motrics.compat.trackeval` — a drop-in for TrackEval's
+        `Evaluator`/`datasets.MotChallenge2DBox`/`metrics.{HOTA,CLEAR,Identity}`
+        (same class names, config keys, and result shape); see above for
+        what's out of scope (parallel eval, full `CLEAR` field set, other
+        metrics).
   - [ ] Broaden core inputs further (`xywh` boxes, zero-copy NumPy) so users
         pass what they already hold.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per

@@ -29,8 +29,10 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 # motrics.compat.motmetrics' MetricsHost.compute() returns a pandas DataFrame
-# (matching motmetrics), so it needs pandas even though the core doesn't.
-compat = ["pandas>=2.0"]
+# (matching motmetrics); motrics.compat.trackeval's HOTA fields are numpy
+# arrays (matching TrackEval) — neither the core nor the other subpackage needs
+# either.
+compat = ["pandas>=2.0", "numpy>=1.24"]
 
 [project.urls]
 Homepage = "https://github.com/kevinconka/motrics"
