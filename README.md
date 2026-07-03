@@ -115,6 +115,17 @@ See [`benchmarks/README.md`](benchmarks/README.md) for how to run it.
         ~3–9× faster than TrackEval, ~13–30× faster than py-motmetrics.
   - [ ] Zero-copy NumPy input path — accepting arrays and sharing one similarity
         matrix across metrics is the next perf lever.
+- [ ] Adoption & migration (from TrackEval / py-motmetrics) — the benchmark's
+      adapters are working prototypes for these:
+  - [ ] Migration guide + metric-name map (`CLR_TP`↔`num_matches`, …).
+  - [ ] `motrics.compat` drop-in shims — a `MOTAccumulator`-compatible class and a
+        TrackEval `eval_sequence(data)` adapter, so migrators change one import.
+  - [ ] Broaden core inputs — accept precomputed similarity matrices, `xywh`
+        boxes (`box_format=`), and NumPy arrays (folds in the zero-copy item),
+        so users pass what they already hold instead of converting.
+  - [ ] MOTChallenge ingest with TrackEval-parity preprocessing (confidence flag,
+        class/distractor/ignore-region handling) so file-based numbers match
+        TrackEval's reported values.
 
 ## License
 
