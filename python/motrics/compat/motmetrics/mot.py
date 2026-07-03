@@ -25,10 +25,11 @@ import motrics
 # was built for IoU). motmetrics' distances have no such threshold -- every
 # finite value is a legal pair, only NaN means "do not pair". So distances are
 # negated into a similarity (still an optimal *minimum*-distance assignment)
-# and disallowed pairs get a sentinel far below any realistic distance value,
-# with the threshold set to only exclude that sentinel.
-_DISALLOWED = -1e18
-_THRESHOLD = -1e17
+# and disallowed pairs get -inf, with the threshold set far enough below any
+# realistic distance (however large -- e.g. norm2squared_matrix on pixel
+# coordinates) that only -inf itself is ever excluded.
+_DISALLOWED = float("-inf")
+_THRESHOLD = -1e300
 
 
 def _pair_similarity(d: SupportsFloat) -> float:

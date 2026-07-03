@@ -82,27 +82,27 @@ fn build_sim_frames<'a>(
     }
 
     let mut frames = Vec::with_capacity(gt_ids.len());
-    for i in 0..gt_ids.len() {
-        if similarity[i].len() != gt_ids[i].len() {
+    for (i, ((g, p), s)) in gt_ids.iter().zip(pred_ids).zip(similarity).enumerate() {
+        if s.len() != g.len() {
             return Err(PyValueError::new_err(format!(
                 "frame {i}: similarity has {} rows, expected {} (len(gt_ids[{i}]))",
-                similarity[i].len(),
-                gt_ids[i].len()
+                s.len(),
+                g.len()
             )));
         }
-        for (r, row) in similarity[i].iter().enumerate() {
-            if row.len() != pred_ids[i].len() {
+        for (r, row) in s.iter().enumerate() {
+            if row.len() != p.len() {
                 return Err(PyValueError::new_err(format!(
                     "frame {i}: similarity row {r} has {} columns, expected {} (len(pred_ids[{i}]))",
                     row.len(),
-                    pred_ids[i].len()
+                    p.len()
                 )));
             }
         }
         frames.push(clear::SimFrame {
-            gt_ids: &gt_ids[i],
-            pred_ids: &pred_ids[i],
-            similarity: &similarity[i],
+            gt_ids: g,
+            pred_ids: p,
+            similarity: s,
         });
     }
     Ok(frames)
