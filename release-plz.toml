@@ -1,8 +1,4 @@
 [workspace]
-# motrics is compiled into a Python extension, not published as a Rust
-# crate — release-plz should still bump the version, write the changelog,
-# and tag/release, just never touch a cargo registry. `publish = false` alone
-# still checks the registry for the current version; `git_only` skips that
-# too and uses git tags as the sole source of truth (motrics has no
-# crates.io presence to check against).
+# motrics isn't published to any cargo registry; git_only makes git tags
+# (not the registry) the source of truth for the current version.
 git_only = true

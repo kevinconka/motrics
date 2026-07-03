@@ -1,18 +1,9 @@
 name: Release-plz
 
-# Keeps a standing "release PR" up to date (version bump + changelog, from
-# Conventional Commits) on every push to main, and on demand via the Actions
-# tab (workflow_dispatch). Merging that PR is the only manual step needed to
-# actually ship — it triggers the release job below, which tags + creates a
-# GitHub Release. The tag is meant to trigger release.yml (wheel build + PyPI
-# publish) on its own — but that only happens if the tag push is attributed to
-# a real identity: GitHub doesn't let the default GITHUB_TOKEN trigger other
-# workflows (anti-recursion safeguard). Add a fine-grained PAT (contents:
-# write on this repo) as the RELEASE_PLZ_TOKEN secret to get that; until then
-# this falls back to GITHUB_TOKEN, which still tags + creates the GitHub
-# Release, it just won't cascade into release.yml (run it manually via its
-# own workflow_dispatch in the meantime). No `cargo publish`: motrics isn't a
-# published crate (see release-plz.toml).
+# Keeps a "release vX.Y.Z" PR up to date from Conventional Commits; merging it
+# tags + creates the GitHub Release, which release.yml picks up to build and
+# publish. RELEASE_PLZ_TOKEN (a fine-grained PAT) is needed for that tag to
+# trigger release.yml — GitHub's default token can't trigger other workflows.
 
 on:
   push:
