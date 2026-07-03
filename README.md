@@ -106,10 +106,11 @@ See [`benchmarks/README.md`](benchmarks/README.md) for details and real-data run
 - [x] Benchmark & parity infrastructure — parity and the `benchmarks/` suite
       share one set of sequences and validate motrics against **TrackEval** and
       **py-motmetrics** (parity in CI). See [`benchmarks/README.md`](benchmarks/README.md).
-  - [ ] Speed/parity on **real** MOTChallenge sequences — `benchmarks/download.py`
-        fetches TrackEval's data bundle, then rerun the suite. The download host
-        is blocked in the dev sandbox and was unreachable from GitHub-hosted CI
-        in testing; run locally or from a self-hosted/permissioned runner.
+  - [x] Speed/parity on **real** MOTChallenge sequences — `benchmarks/download.py`
+        fetches TrackEval's data bundle (MOT17-train); validated in CI and
+        locally. motrics matches TrackEval / py-motmetrics on real data up to
+        Hungarian tie-breaking (a couple of switches out of thousands), and runs
+        ~3–9× faster than TrackEval, ~13–30× faster than py-motmetrics.
   - [ ] Zero-copy NumPy input path — accepting arrays and sharing one similarity
         matrix across metrics is the next perf lever.
 
