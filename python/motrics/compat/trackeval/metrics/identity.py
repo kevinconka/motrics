@@ -1,8 +1,7 @@
 """``Identity`` metric (IDF1/IDP/IDR), mirroring ``trackeval.metrics.Identity``.
 
-``eval_sequence`` delegates to :func:`motrics.compute_identity`, which already
-implements the real algorithm (independently parity-tested against TrackEval);
-this class only translates field names and combination.
+``eval_sequence`` delegates to :func:`motrics.compute_identity`; this class
+only translates field names and combination.
 """
 
 from __future__ import annotations

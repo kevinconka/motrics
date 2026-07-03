@@ -2,9 +2,9 @@
 
 ``eval_sequence`` delegates to :func:`motrics.compute_hota`, whose per-alpha
 raw counts (``hota_tp_alphas``/``hota_fn_alphas``/``hota_fp_alphas``,
-``ass_re_alphas``/``ass_pr_alphas``, ``loca_alphas``) are verified bit-exact
-against TrackEval's own ``HOTA.eval_sequence``; this class only translates
-field names and combination.
+``ass_re_alphas``/``ass_pr_alphas``, ``loca_alphas``) match TrackEval's own
+per-alpha ``HOTA_TP``/``HOTA_FN``/``HOTA_FP``/``AssRe``/``AssPr``/``LocA``;
+this class only translates field names and combination.
 """
 
 from __future__ import annotations

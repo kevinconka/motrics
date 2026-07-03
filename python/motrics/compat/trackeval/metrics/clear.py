@@ -4,8 +4,8 @@ Only the MOTA/MOTP subset of TrackEval's real field set is implemented —
 ``MT``/``PT``/``ML``/``Frag``/``MODA``/``sMOTA``/``CLR_Re``/``CLR_Pr``/``MOTAL``/
 ``CLR_F1``/``FP_per_frame``/``MTR``/``PTR``/``MLR`` need mostly-tracked/lost and
 fragmentation bookkeeping the Rust core doesn't compute yet. ``eval_sequence``
-delegates to :func:`motrics.compute_clear` (independently parity-tested
-against TrackEval); this class only translates field names and combination.
+delegates to :func:`motrics.compute_clear`; this class only translates field
+names and combination.
 """
 
 from __future__ import annotations

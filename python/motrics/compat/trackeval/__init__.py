@@ -41,9 +41,6 @@ What's NOT implemented (see each module's docstring for specifics):
   ``MODA``/``sMOTA``/etc., which need mostly-tracked/lost and fragmentation
   bookkeeping the Rust core doesn't compute yet.
 - ``metrics.{IDEucl,JAndF,TrackMAP,VACE}``: not implemented at all.
-
-``metrics.{HOTA,CLEAR,Identity}.eval_sequence``/``combine_sequences`` are
-verified bit-exact against real TrackEval (see ``tests/test_compat_trackeval.py``).
 """
 
 from __future__ import annotations

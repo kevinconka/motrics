@@ -5,8 +5,7 @@ Directory scanning, seqmap parsing, and ``seqinfo.ini`` reading follow
 TrackEval's own conventions exactly (``GT_FOLDER/BENCHMARK-SPLIT/<seq>/gt/gt.txt``,
 a seqmap CSV listing sequence names, per-sequence ``seqinfo.ini`` for frame
 counts). Preprocessing delegates to :func:`motrics.load_motchallenge_gt` /
-:func:`motrics.load_motchallenge` / :func:`motrics.preprocess_motchallenge`
-(already parity-tested against TrackEval's real preprocessing).
+:func:`motrics.load_motchallenge` / :func:`motrics.preprocess_motchallenge`.
 
 Not implemented: ``INPUT_AS_ZIP`` (zipped tracker/gt input) and classes other
 than ``pedestrian`` — TrackEval's own MOT Challenge adapter only supports
