@@ -11,8 +11,8 @@ An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
 
 ## Highlights
 
-- ⚡ **Extremely fast** — Rust core, ~7–16× faster than TrackEval and
-  py-motmetrics on real MOT17 data.
+- ⚡ **Extremely fast** — Rust core, ~7–9× faster than TrackEval and ~12–16×
+  faster than py-motmetrics on real MOT17 data.
 - 🎯 **Numerically validated** — exact parity with TrackEval on CLEAR,
   Identity, and HOTA, checked in CI.
 - 🔄 **Drop-in migration** — swap one import to replace py-motmetrics; evaluate
