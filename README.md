@@ -1,17 +1,30 @@
 # motrics
 
+[![CI](https://github.com/kevinconka/motrics/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinconka/motrics/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/kevinconka/motrics)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 An extremely fast MOT and HOTA metrics library, written in Rust.
 
 `motrics` computes Multiple Object Tracking (MOT) evaluation metrics — CLEAR
-(MOTA/MOTP), Identity (IDF1), and HOTA — with a Rust core and ergonomic Python
-bindings.
+(MOTA/MOTP), Identity (IDF1), and HOTA — with a Rust core and an ergonomic
+Python API.
 
-> **Status:** the core metric families — CLEAR, Identity, and HOTA — are
-> implemented on a shared IoU + assignment layer, with MOTChallenge ingest and
-> numeric parity tests against [TrackEval](https://github.com/JonathonLuiten/TrackEval).
-> See the roadmap below.
+## Highlights
 
-## Install (from source)
+- ⚡ **Extremely fast** — Rust core, ~3–14× faster than TrackEval and
+  py-motmetrics on real MOT17 data.
+- 🎯 **Numerically validated** — exact parity with TrackEval on CLEAR,
+  Identity, and HOTA, checked in CI.
+- 🔄 **Drop-in migration** — swap one import to replace py-motmetrics, no
+  other code changes.
+- 🐍 **Ergonomic, typed Python API** — PEP 561, zero required runtime
+  dependencies.
+
+## Install
+
+Not on PyPI yet — build from source:
 
 ```bash
 uv sync --group dev        # create the environment + install dev tools
@@ -19,7 +32,7 @@ uv run maturin develop     # compile the Rust extension into the venv
 uv run python -c "import motrics; print(motrics.version())"
 ```
 
-## Usage
+## Quickstart
 
 ```python
 import motrics
@@ -39,7 +52,7 @@ print(clear.mota, identity.idf1, hota.hota)
 ```
 
 Boxes use the `xyxy` convention `(x1, y1, x2, y2)`. The lower-level primitives
-`iou`, `iou_matrix`, and `match_boxes` are also exposed. Need a precomputed
+`iou`, `iou_matrix`, and `match_boxes` are also exposed. Have a precomputed
 similarity matrix instead of boxes (e.g. a custom Re-ID distance)?
 `compute_clear_from_similarity` and `compute_identity_from_similarity` take
 that directly.
@@ -64,47 +77,50 @@ summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="a
 ```
 
 `pip install motrics[compat]` (pulls in pandas, needed only for this
-subpackage). Supported metric names: `mota`, `motp`, `idf1`, `idp`, `idr`,
+subpackage). Supported metric names — `mota`, `motp`, `idf1`, `idp`, `idr`,
 `recall`, `precision`, `num_false_positives`, `num_misses`, `num_switches`,
-`num_unique_objects` — the same names py-motmetrics uses. Per-trajectory
-metrics (`mostly_tracked`, `partially_tracked`, `mostly_lost`,
-`num_fragmentations`, `num_transfer`, `num_ascend`, `num_migrate`) aren't
+`num_unique_objects` — are the same ones py-motmetrics uses. Per-trajectory
+metrics (mostly-tracked, fragmentations, transfer/ascend/migrate) aren't
 implemented yet; requesting them raises `NotImplementedError` naming exactly
 what's missing, rather than a silently wrong number. See
 [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/) for
 what else differs (e.g. no `events`/`mot_events` DataFrame).
 
-### Reading numbers from TrackEval or motmetrics against motrics' native API
+<details>
+<summary>Metric name map — TrackEval / py-motmetrics / motrics' native API</summary>
 
-If you're using `motrics`' own API directly (faster than the compat layer —
-no per-frame Python bookkeeping) rather than `compat.motmetrics`, here's how
-the field names line up:
+Using `motrics`' own API directly (faster than the compat layer — no
+per-frame Python bookkeeping)? Here's how the field names line up:
 
-| Concept                      | TrackEval            | py-motmetrics         | `motrics` (native)                        |
-| ----------------------------- | --------------------- | ---------------------- | ------------------------------------------ |
-| Matched detections (incl. switches) | `CLR_TP`         | `num_detections`       | `ClearMetrics.num_matches`                 |
-| False positives               | `CLR_FP`               | `num_false_positives`  | `ClearMetrics.num_false_positives`         |
-| Misses                         | `CLR_FN`               | `num_misses`           | `ClearMetrics.num_misses`                  |
-| Identity switches              | `IDSW`                 | `num_switches`         | `ClearMetrics.num_switches`                |
-| MOTA / MOTP                    | `MOTA` / `MOTP`        | `mota` / `motp`        | `ClearMetrics.mota` / `.motp`              |
-| Identity TP / FP / FN          | `IDTP`/`IDFP`/`IDFN`   | `idtp`/`idfp`/`idfn`   | `IdentityMetrics.idtp`/`.idfp`/`.idfn`     |
-| IDF1 / IDP / IDR               | `IDF1`/`IDP`/`IDR`     | `idf1`/`idp`/`idr`     | `IdentityMetrics.idf1`/`.idp`/`.idr`       |
-| HOTA / DetA / AssA / LocA      | `HOTA`/`DetA`/`AssA`/`LocA` | — (not in motmetrics) | `HotaMetrics.hota`/`.deta`/`.assa`/`.loca` |
+| Concept                              | TrackEval                   | py-motmetrics          | `motrics` (native)                         |
+| ------------------------------------- | ---------------------------- | ------------------------ | -------------------------------------------- |
+| Matched detections (incl. switches)   | `CLR_TP`                    | `num_detections`       | `ClearMetrics.num_matches`                 |
+| False positives                       | `CLR_FP`                    | `num_false_positives`  | `ClearMetrics.num_false_positives`         |
+| Misses                                | `CLR_FN`                    | `num_misses`           | `ClearMetrics.num_misses`                  |
+| Identity switches                     | `IDSW`                      | `num_switches`         | `ClearMetrics.num_switches`                |
+| MOTA / MOTP                           | `MOTA` / `MOTP`             | `mota` / `motp`        | `ClearMetrics.mota` / `.motp`              |
+| Identity TP / FP / FN                 | `IDTP`/`IDFP`/`IDFN`        | `idtp`/`idfp`/`idfn`   | `IdentityMetrics.idtp`/`.idfp`/`.idfn`     |
+| IDF1 / IDP / IDR                      | `IDF1`/`IDP`/`IDR`          | `idf1`/`idp`/`idr`     | `IdentityMetrics.idf1`/`.idp`/`.idr`       |
+| HOTA / DetA / AssA / LocA             | `HOTA`/`DetA`/`AssA`/`LocA` | — (not in motmetrics)  | `HotaMetrics.hota`/`.deta`/`.assa`/`.loca` |
+
+</details>
 
 ## Benchmarks
 
-Roughly how much faster motrics is than TrackEval and py-motmetrics on real
-MOT17 data (release build; illustrative, machine-dependent):
+**~14× faster than py-motmetrics, ~6× faster than TrackEval** (with HOTA) on
+real MOT17 data, release build:
 
 | motrics vs…   | CLEAR + Identity | With HOTA |
 | ------------- | ---------------- | --------- |
 | TrackEval     | ~3–4×            | ~6×       |
 | py-motmetrics | ~14×             | —         |
 
-See [`benchmarks/README.md`](benchmarks/README.md) for methodology, numbers,
-and how to run it yourself.
+Numbers are illustrative and machine-dependent. See
+[`benchmarks/README.md`](benchmarks/README.md) for methodology and how to run
+it yourself.
 
-## Roadmap
+<details>
+<summary>Roadmap</summary>
 
 - [x] Project scaffolding (build, lint, packaging, CI)
 - [x] Bounding-box IoU + assignment (Hungarian/greedy) primitives
@@ -114,16 +130,13 @@ and how to run it yourself.
 - [x] MOTChallenge ingest + integration tests
 - [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
 - [x] Benchmark & parity infrastructure vs **TrackEval** and **py-motmetrics**,
-      on real MOTChallenge data, validated in CI. See
-      [`benchmarks/README.md`](benchmarks/README.md) for methodology, numbers,
-      and caveats.
+      on real MOTChallenge data, validated in CI.
   - [ ] Zero-copy NumPy input path (folds into "broaden core inputs" below).
 - [ ] Replace TrackEval / py-motmetrics, not just benchmark against them:
   - [x] Precomputed-similarity core inputs (`compute_clear_from_similarity`,
         `compute_identity_from_similarity`) — the piece `compat.motmetrics`
         needed, and the first slice of "broaden core inputs" below.
   - [x] `motrics.compat.motmetrics` — a drop-in `MOTAccumulator` replacement.
-        See "Migrating from py-motmetrics" above.
   - [x] Migration guide + metric-name map (see above).
   - [ ] `motrics.compat.trackeval` — a drop-in for the MOTChallenge evaluation
         path (`Evaluator`/dataset/metrics), no TrackEval installed. Gated on
@@ -141,10 +154,12 @@ and how to run it yourself.
         work, not just an adapter; tackle when a mask benchmark is needed.
   - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
 
+</details>
+
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, tooling, and
-checks to run before opening a PR.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, tooling,
+and checks to run before opening a PR.
 
 ## License
 
