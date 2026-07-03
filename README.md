@@ -122,8 +122,8 @@ install required — but only for the subset below. `HOTA`, `Identity`, and
 unsupported config or fields raise rather than silently returning a wrong
 number.
 
-- `pip install motrics[compat]` (pulls in numpy, needed only for this
-  subpackage — HOTA's per-alpha fields are numpy arrays, matching TrackEval).
+- No extra needed — this subpackage relies only on `numpy` (a core
+  dependency), whose arrays back HOTA's per-alpha fields, matching TrackEval.
 - Not implemented: parallel evaluation, error-handling config
   (`BREAK_ON_ERROR`/etc. — always raises immediately), printing/file
   output/plotting; zipped input (`INPUT_AS_ZIP`); `DO_PREPROC=False` and

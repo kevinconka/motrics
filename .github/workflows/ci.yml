@@ -60,6 +60,7 @@ jobs:
     name: Benchmark (real data)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 20 # bounds a stalled ~150 MB data fetch
     permissions:
       contents: read
       pull-requests: write

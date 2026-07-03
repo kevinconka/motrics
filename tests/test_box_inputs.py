@@ -112,8 +112,20 @@ def test_numpy_iou_matrix_and_match_boxes() -> None:
     np_result = motrics.iou_matrix(boxes_a, boxes_b)
     assert np.allclose(np_result, list_result)
 
+    # NumPy array + xywh exercises the PyBoxes::Array + BoxFormat::Xywh path.
+    boxes_a_xywh = np.array([UNIT_XYWH, OFFSET_XYWH], dtype=np.float64)
+    boxes_b_xywh = np.array([UNIT_XYWH], dtype=np.float64)
+    np_xywh = motrics.iou_matrix(boxes_a_xywh, boxes_b_xywh, box_format="xywh")
+    assert np.allclose(np_xywh, list_result)
+
     matching = motrics.match_boxes(boxes_a, boxes_b, iou_threshold=0.1)
     assert matching.matches == [(0, 0)]
+
+    matching_xywh = motrics.match_boxes(
+        boxes_a_xywh, boxes_b_xywh, iou_threshold=0.1, box_format="xywh"
+    )
+    assert matching_xywh.matches == matching.matches
+    assert matching_xywh.scores == pytest.approx(matching.scores)
 
 
 def test_numpy_non_contiguous_array_still_works() -> None:
