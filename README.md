@@ -107,6 +107,34 @@ print(results["MOT17-02-FRCNN"]["hota"]["hota"])
   detection-weighted average, not TrackEval's exact per-alpha combination.
 
 <details>
+<summary>The original TrackEval code, for reference</summary>
+
+```python
+import trackeval
+
+eval_config = trackeval.Evaluator.get_default_eval_config()
+evaluator = trackeval.Evaluator(eval_config)
+
+dataset_config = trackeval.datasets.MotChallenge2DBox.get_default_dataset_config()
+dataset_config["GT_FOLDER"] = "data/gt/mot_challenge/"
+dataset_config["TRACKERS_FOLDER"] = "data/trackers/mot_challenge/"
+dataset_config["BENCHMARK"] = "MOT17"
+dataset_list = [trackeval.datasets.MotChallenge2DBox(dataset_config)]
+
+metrics_list = [trackeval.metrics.HOTA(), trackeval.metrics.CLEAR(), trackeval.metrics.Identity()]
+
+results, messages = evaluator.evaluate(dataset_list, metrics_list)
+```
+
+Needs `GT_FOLDER`/`TRACKERS_FOLDER` laid out exactly as
+`BENCHMARK-SPLIT_TO_EVAL/<seq>/gt/gt.txt` and
+`BENCHMARK-SPLIT_TO_EVAL/<tracker>/data/<seq>.txt`, plus a seqmap file
+listing which sequences to run — the directory-scanning/config machinery
+`evaluate_mot_challenge` skips.
+
+</details>
+
+<details>
 <summary>Metric name map — TrackEval / py-motmetrics / motrics' native API</summary>
 
 Using `motrics`' own API directly (faster than the compat layer — no
