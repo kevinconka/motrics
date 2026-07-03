@@ -16,12 +16,20 @@ genuine, not circular.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import motrics
 import numpy as np
 import pytest
 
 trackeval_datasets = pytest.importorskip("trackeval.datasets")
 
+# Validated against trackeval==1.3.0. This test reaches into private internals
+# (_calculate_box_ious, a bare instance via object.__new__) to call TrackEval's
+# real preprocessing without a full dataset directory/seqmap layout; a future
+# trackeval release could rename/restructure these and break this test loudly
+# (ImportError/AttributeError) rather than silently.
 MotChallenge2DBox = trackeval_datasets.mot_challenge_2d_box.MotChallenge2DBox
 
 _CLASS_NAME_TO_ID = {
@@ -56,14 +64,16 @@ PRED_ROWS = [
 NUM_TIMESTEPS = 2
 
 
-def _write_rows(path, rows: list[tuple]) -> None:
+def _write_rows(path: Path, rows: list[tuple]) -> None:
     path.write_text(
         "\n".join(",".join(str(v) for v in row) for row in rows) + "\n",
         encoding="utf-8",
     )
 
 
-def _motrics_result(tmp_path):
+def _motrics_result(
+    tmp_path: Path,
+) -> tuple[list[list[int]], list[list[tuple]], list[list[int]], list[list[tuple]]]:
     gt_path, pred_path = tmp_path / "gt.txt", tmp_path / "pred.txt"
     _write_rows(gt_path, GT_ROWS)
     _write_rows(pred_path, PRED_ROWS)
@@ -72,7 +82,7 @@ def _motrics_result(tmp_path):
     return motrics.preprocess_motchallenge(gt, pred)
 
 
-def _trackeval_result():
+def _trackeval_result() -> dict[str, Any]:
     """Build TrackEval's raw_data straight from the row tuples above (an
     independent parse, not routed through motrics' own ingest) and run its
     real (unmodified) preprocessing."""
@@ -125,7 +135,7 @@ def _xyxy_set(boxes_xywh: np.ndarray) -> set[tuple[float, float, float, float]]:
     return {(x, y, x + w, y + h) for x, y, w, h in boxes_xywh.tolist()}
 
 
-def test_preprocess_motchallenge_matches_trackeval(tmp_path) -> None:
+def test_preprocess_motchallenge_matches_trackeval(tmp_path: Path) -> None:
     m_gt_ids, m_gt_boxes, m_pred_ids, m_pred_boxes = _motrics_result(tmp_path)
     te = _trackeval_result()
 
