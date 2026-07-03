@@ -5,11 +5,8 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-An extremely fast MOT and HOTA metrics library, written in Rust.
-
-`motrics` computes Multiple Object Tracking (MOT) evaluation metrics — CLEAR
-(MOTA/MOTP), Identity (IDF1), and HOTA — with a Rust core and an ergonomic
-Python API.
+An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
+(MOTA/MOTP), Identity (IDF1), and HOTA, with an ergonomic Python API.
 
 ## Highlights
 
@@ -51,11 +48,7 @@ hota = motrics.compute_hota(gt_ids, gt_boxes, pred_ids, pred_boxes)
 print(clear.mota, identity.idf1, hota.hota)
 ```
 
-Boxes use the `xyxy` convention `(x1, y1, x2, y2)`. The lower-level primitives
-`iou`, `iou_matrix`, and `match_boxes` are also exposed. Have a precomputed
-similarity matrix instead of boxes (e.g. a custom Re-ID distance)?
-`compute_clear_from_similarity` and `compute_identity_from_similarity` take
-that directly.
+Boxes use the `xyxy` convention `(x1, y1, x2, y2)`.
 
 ## Migrating from py-motmetrics
 
@@ -107,8 +100,7 @@ per-frame Python bookkeeping)? Here's how the field names line up:
 
 ## Benchmarks
 
-**~14× faster than py-motmetrics, ~6× faster than TrackEval** (with HOTA) on
-real MOT17 data, release build:
+On real MOT17 data, release build:
 
 | motrics vs…   | CLEAR + Identity | With HOTA |
 | ------------- | ---------------- | --------- |
