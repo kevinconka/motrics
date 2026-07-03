@@ -37,14 +37,14 @@ GtFrames = dict[int, tuple[list[int], list[Bbox], list[int], list[bool]]]
 
 #: MOTChallenge class id for the evaluated class; every other class exists
 #: only to drive preprocessing (see :func:`preprocess_motchallenge`).
-PEDESTRIAN_CLASS = 1
+_PEDESTRIAN_CLASS = 1
 #: Class ids TrackEval's ``MotChallenge2DBox`` treats as distractors: a
 #: detection is a distractor if it looks enough like one of these (not a
 #: pedestrian) that a tracker firing on it shouldn't be penalised.
 #: ``person_on_vehicle``, ``static_person``, ``distractor``, ``reflection``.
-DISTRACTOR_CLASSES = frozenset({2, 7, 8, 12})
+_DISTRACTOR_CLASSES = frozenset({2, 7, 8, 12})
 #: MOT20 additionally treats ``non_mot_vehicle`` as a distractor.
-MOT20_EXTRA_DISTRACTOR_CLASS = 6
+_MOT20_EXTRA_DISTRACTOR_CLASS = 6
 
 
 def _read_rows(path: str | PathLike[str]) -> list[list[str]]:
@@ -101,7 +101,7 @@ def load_motchallenge_gt(path: str | PathLike[str]) -> GtFrames:
         )
         ids.append(int(float(parts[1])))
         boxes.append(_box(parts))
-        classes.append(int(float(parts[7])) if len(parts) > 7 else PEDESTRIAN_CLASS)
+        classes.append(int(float(parts[7])) if len(parts) > 7 else _PEDESTRIAN_CLASS)
         keep.append(float(parts[6]) != 0 if len(parts) > 6 else True)
     return frames
 
@@ -162,9 +162,9 @@ def preprocess_motchallenge(
         ``(gt_ids, gt_boxes, pred_ids, pred_boxes)``, ready for
         ``compute_clear`` / ``compute_identity`` / ``compute_hota``.
     """
-    distractor_classes = DISTRACTOR_CLASSES
+    distractor_classes = _DISTRACTOR_CLASSES
     if benchmark == "MOT20":
-        distractor_classes |= {MOT20_EXTRA_DISTRACTOR_CLASS}
+        distractor_classes |= {_MOT20_EXTRA_DISTRACTOR_CLASS}
 
     gt_ids: list[list[int]] = []
     gt_boxes: list[list[Bbox]] = []
@@ -184,7 +184,7 @@ def preprocess_motchallenge(
         keep_gt = [
             i
             for i in range(len(g_ids))
-            if g_classes[i] == PEDESTRIAN_CLASS and g_keep[i]
+            if g_classes[i] == _PEDESTRIAN_CLASS and g_keep[i]
         ]
         gt_ids.append([g_ids[i] for i in keep_gt])
         gt_boxes.append([g_boxes[i] for i in keep_gt])
