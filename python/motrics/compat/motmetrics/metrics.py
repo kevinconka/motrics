@@ -122,7 +122,8 @@ class MetricsHost:
 
         import pandas as pd
 
-        return pd.DataFrame(data, index=[0 if name is None else name])
+        row_name = 0 if name is None else name
+        return pd.DataFrame(data, index=pd.Index([row_name]))
 
 
 def create() -> MetricsHost:
