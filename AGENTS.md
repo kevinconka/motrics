@@ -85,6 +85,8 @@ uv run pytest
   Annotate every Python function signature.
 - **Commits:** Conventional Commits (`feat:`, `fix:`, `chore:`, `ci:`, ...).
 - **Branches:** conventional prefixes (`feat/...`, `fix/...`, `chore/...`).
+- **Be concise.** PR descriptions, commit messages, and code comments state
+  the fact, not the journey — no debugging narration, no restating the diff.
 - Keep the roadmap in `README.md` up to date as metrics land.
 
 ## Roadmap
