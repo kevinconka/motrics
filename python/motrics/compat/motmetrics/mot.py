@@ -7,10 +7,9 @@ remapped to the dense integers motrics' core requires) and handed to
 than a per-frame event log.
 
 Not a full reimplementation: unlike real motmetrics, per-frame continuity
-("carry forward an established track when possible") is a soft preference
-inside one optimal assignment, not a hard first pass — see
-``motrics.compat.motmetrics`` docs for what that means for edge cases. There
-is also no ``events``/``mot_events`` DataFrame; use
+("carry forward an established track when possible") is a preference inside
+one optimal assignment rather than a hard first pass, though the two agree in
+practice. There is also no ``events``/``mot_events`` DataFrame; use
 :func:`motrics.compat.motmetrics.metrics.create` for summary metrics.
 """
 
@@ -21,13 +20,9 @@ from typing import Any, SupportsFloat
 
 import motrics
 
-# motrics' similarity convention is "higher is better, threshold on value" (it
-# was built for IoU). motmetrics' distances have no such threshold -- every
-# finite value is a legal pair, only NaN means "do not pair". So distances are
-# negated into a similarity (still an optimal *minimum*-distance assignment)
-# and disallowed pairs get -inf, with the threshold set far enough below any
-# realistic distance (however large -- e.g. norm2squared_matrix on pixel
-# coordinates) that only -inf itself is ever excluded.
+# motrics wants a similarity with a threshold; motmetrics distances have none
+# (only NaN means "do not pair"), so distances are negated and disallowed
+# pairs get -inf, with the threshold set to exclude only that.
 _DISALLOWED = float("-inf")
 _THRESHOLD = -1e300
 

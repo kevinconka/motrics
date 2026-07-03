@@ -58,15 +58,10 @@ pub struct ClearMetrics {
     pub num_switches: usize,
 }
 
-// A previously matched (gt, pred) pair gets this bonus so the optimal assignment
-// keeps continuing tracks together; far larger than the max IoU of 1.0.
-const CONTINUITY_BONUS: f64 = 1000.0;
+// Scaled by the frame's max score so continuation always wins; mirrors TrackEval's fixed `1000 * score_mat + similarity`.
+const CONTINUITY_BONUS_MULTIPLIER: f64 = 1000.0;
 
-// Filler score for pairs below `threshold`, so the maximising solve never
-// prefers a disallowed pair over an allowed one. Must be lower than any real
-// score: `0.0` would work for IoU (always >= 0), but callers that pass a
-// negated distance as similarity (`compute_clear_from_similarity`) can have
-// every real score negative, in which case `0.0` would look best of all.
+// Filler for disallowed pairs; 0.0 only works while every real score stays non-negative.
 const REJECT: f64 = -1e18;
 
 /// Match one frame against a precomputed similarity matrix and fold the
@@ -94,16 +89,22 @@ fn accumulate_frame(
         return;
     }
 
-    // Score matrix for maximisation: allowed pairs (similarity >= threshold)
-    // score `sim (+ bonus if continuing a track)`; disallowed pairs score
-    // `REJECT` and are filtered out after solving.
+    let max_eligible = sim
+        .iter()
+        .flatten()
+        .copied()
+        .filter(|v| v.is_finite() && *v >= threshold)
+        .fold(0.0_f64, |acc, v| acc.max(v.abs()));
+    let continuity_bonus = CONTINUITY_BONUS_MULTIPLIER * (1.0 + max_eligible);
+
+    // Maximisation target: allowed pairs score `sim (+ bonus if continuing)`, disallowed pairs score REJECT.
     let mut flat = vec![REJECT; n_gt * n_pred];
     for i in 0..n_gt {
         let continues = last_pred_of_gt.get(&gt_ids[i]);
         for j in 0..n_pred {
             if sim[i][j] >= threshold {
                 let bonus = match continues {
-                    Some(&prev) if prev == pred_ids[j] => CONTINUITY_BONUS,
+                    Some(&prev) if prev == pred_ids[j] => continuity_bonus,
                     _ => 0.0,
                 };
                 flat[i * n_pred + j] = bonus + sim[i][j];

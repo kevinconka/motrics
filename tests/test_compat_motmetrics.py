@@ -68,6 +68,16 @@ def test_metrics_compute_rejects_unsupported_metric() -> None:
         compat_mm.metrics.create().compute(acc, metrics=["mostly_tracked"])
 
 
+def test_continuity_survives_large_magnitude_distances() -> None:
+    """A fixed continuity bonus would lose here: raw-score gap (1500) > 1000."""
+    acc = compat_mm.MOTAccumulator(auto_id=True)
+    acc.update([0], [10], [[0.0]])
+    acc.update([0], [10, 20], [[2000.0, 500.0]])
+
+    summary = compat_mm.metrics.create().compute(acc, metrics=["num_switches"])
+    assert summary["num_switches"].iloc[0] == 0
+
+
 def test_accumulator_auto_id_and_manual_id_are_mutually_exclusive() -> None:
     auto = compat_mm.MOTAccumulator(auto_id=True)
     with pytest.raises(AssertionError):
