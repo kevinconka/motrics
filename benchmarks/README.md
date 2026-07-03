@@ -21,6 +21,17 @@ larger.
 Exact numeric parity is also checked on synthetic sequences in
 `tests/test_parity.py` (`fixtures.make_synthetic`), which run offline in CI.
 
+## CI
+
+Every pull request runs this benchmark (real data cached across runs) and
+posts the results as a sticky comment (updated in place on each push, not a
+new comment every time) — see the `benchmark` job in
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml). It's informational,
+not a merge gate: CI runner timing has real variance, so treat the numbers as
+a rough signal rather than a precise regression check. `--markdown PATH`
+writes the same report `benchmark.py` prints to stdout as a markdown file for
+that comment.
+
 ## Notes
 
 - **Ground truth is preprocessed.** `fixtures.load_real()` runs gt.txt through

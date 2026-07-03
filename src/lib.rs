@@ -4,26 +4,39 @@
 //! public, ergonomic API lives in the `motrics` Python package (see
 //! `python/motrics/`), which re-exports the pieces below.
 
+use std::borrow::Cow;
+
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 mod assignment;
+mod boxes;
 mod clear;
 mod hota;
 mod identity;
 mod iou;
 
 use assignment::Method;
+use boxes::{to_xyxy, BoxFormat, PyBoxes};
 use iou::Bbox;
+
+/// Convert one `box_format` argument's worth of per-frame [`PyBoxes`] into
+/// `xyxy`, borrowing (zero-copy) wherever the format and layout allow it.
+fn to_xyxy_frames<'a>(
+    boxes: &'a [PyBoxes<'a>],
+    format: BoxFormat,
+) -> PyResult<Vec<Cow<'a, [Bbox]>>> {
+    boxes.iter().map(|b| b.as_boxes(format)).collect()
+}
 
 /// Validate frame-aligned inputs and borrow them as a slice of [`clear::Frame`].
 ///
 /// Shared by the sequence metrics (`compute_clear`, `compute_identity`).
 fn build_frames<'a>(
     gt_ids: &'a [Vec<i64>],
-    gt_boxes: &'a [Vec<Bbox>],
+    gt_boxes: &'a [Cow<'a, [Bbox]>],
     pred_ids: &'a [Vec<i64>],
-    pred_boxes: &'a [Vec<Bbox>],
+    pred_boxes: &'a [Cow<'a, [Bbox]>],
 ) -> PyResult<Vec<clear::Frame<'a>>> {
     if gt_ids.len() != pred_ids.len() {
         return Err(PyValueError::new_err(format!(
@@ -56,9 +69,9 @@ fn build_frames<'a>(
         }
         frames.push(clear::Frame {
             gt_ids: &gt_ids[i],
-            gt_boxes: &gt_boxes[i],
+            gt_boxes: gt_boxes[i].as_ref(),
             pred_ids: &pred_ids[i],
-            pred_boxes: &pred_boxes[i],
+            pred_boxes: pred_boxes[i].as_ref(),
         });
     }
     Ok(frames)
@@ -124,19 +137,31 @@ fn is_debug_build() -> bool {
     cfg!(debug_assertions)
 }
 
-/// Intersection-over-union of two `xyxy` boxes `(x1, y1, x2, y2)`.
+/// Intersection-over-union of two boxes.
+///
+/// `box_format` is `"xyxy"` (`x1, y1, x2, y2`, the default) or `"xywh"`
+/// (`x, y, width, height`).
 #[pyfunction]
-#[pyo3(name = "iou")]
-fn iou_py(box_a: Bbox, box_b: Bbox) -> f64 {
-    iou::iou(&box_a, &box_b)
+#[pyo3(name = "iou", signature = (box_a, box_b, box_format="xyxy"))]
+fn iou_py(box_a: Bbox, box_b: Bbox, box_format: &str) -> PyResult<f64> {
+    let format = BoxFormat::parse(box_format)?;
+    Ok(iou::iou(&to_xyxy(box_a, format), &to_xyxy(box_b, format)))
 }
 
-/// Pairwise IoU matrix between two sets of `xyxy` boxes.
+/// Pairwise IoU matrix between two sets of boxes.
+///
+/// Each of `boxes_a`/`boxes_b` is a Python sequence of 4-tuples or a `(N, 4)`
+/// float64 NumPy array (zero-copy for a contiguous `xyxy` array). `box_format`
+/// is `"xyxy"` (default) or `"xywh"`.
 ///
 /// Returns a list of `len(boxes_a)` rows, each with `len(boxes_b)` IoU values.
 #[pyfunction]
-fn iou_matrix(boxes_a: Vec<Bbox>, boxes_b: Vec<Bbox>) -> Vec<Vec<f64>> {
-    iou::iou_matrix(&boxes_a, &boxes_b)
+#[pyo3(signature = (boxes_a, boxes_b, box_format="xyxy"))]
+fn iou_matrix(boxes_a: PyBoxes, boxes_b: PyBoxes, box_format: &str) -> PyResult<Vec<Vec<f64>>> {
+    let format = BoxFormat::parse(box_format)?;
+    let a = boxes_a.as_boxes(format)?;
+    let b = boxes_b.as_boxes(format)?;
+    Ok(iou::iou_matrix(&a, &b))
 }
 
 /// The result of matching two sets of boxes.
@@ -168,18 +193,19 @@ impl Matching {
     }
 }
 
-/// Match two sets of `xyxy` boxes.
+/// Match two sets of boxes.
 ///
 /// `method` is either `"hungarian"` (optimal, maximises total IoU) or
 /// `"greedy"` (assign highest-IoU pairs first). Only pairs with IoU at or above
-/// `iou_threshold` are kept.
+/// `iou_threshold` are kept. `box_format` is `"xyxy"` (default) or `"xywh"`.
 #[pyfunction]
-#[pyo3(signature = (boxes_a, boxes_b, iou_threshold=0.5, method="hungarian"))]
+#[pyo3(signature = (boxes_a, boxes_b, iou_threshold=0.5, method="hungarian", box_format="xyxy"))]
 fn match_boxes(
-    boxes_a: Vec<Bbox>,
-    boxes_b: Vec<Bbox>,
+    boxes_a: PyBoxes,
+    boxes_b: PyBoxes,
     iou_threshold: f64,
     method: &str,
+    box_format: &str,
 ) -> PyResult<Matching> {
     let method = match method {
         "hungarian" => Method::Hungarian,
@@ -190,6 +216,9 @@ fn match_boxes(
             )))
         }
     };
+    let format = BoxFormat::parse(box_format)?;
+    let boxes_a = boxes_a.as_boxes(format)?;
+    let boxes_b = boxes_b.as_boxes(format)?;
 
     let n_a = boxes_a.len();
     let n_b = boxes_b.len();
@@ -268,16 +297,23 @@ impl From<clear::ClearMetrics> for ClearMetrics {
 /// Inputs are frame-aligned: `gt_ids[t]` / `gt_boxes[t]` describe ground-truth
 /// objects in frame `t` (and likewise `pred_ids` / `pred_boxes` for the
 /// tracker). `gt_ids` and `pred_ids` must have the same number of frames, and
-/// within each frame the id and box lists must have equal length.
+/// within each frame the id and box lists must have equal length. Each
+/// frame's boxes may be a sequence of 4-tuples or a `(N, 4)` float64 NumPy
+/// array (zero-copy for a contiguous `xyxy` array); `box_format` is `"xyxy"`
+/// (default) or `"xywh"`.
 #[pyfunction]
-#[pyo3(signature = (gt_ids, gt_boxes, pred_ids, pred_boxes, iou_threshold=0.5))]
+#[pyo3(signature = (gt_ids, gt_boxes, pred_ids, pred_boxes, iou_threshold=0.5, box_format="xyxy"))]
 fn compute_clear(
     gt_ids: Vec<Vec<i64>>,
-    gt_boxes: Vec<Vec<Bbox>>,
+    gt_boxes: Vec<PyBoxes>,
     pred_ids: Vec<Vec<i64>>,
-    pred_boxes: Vec<Vec<Bbox>>,
+    pred_boxes: Vec<PyBoxes>,
     iou_threshold: f64,
+    box_format: &str,
 ) -> PyResult<ClearMetrics> {
+    let format = BoxFormat::parse(box_format)?;
+    let gt_boxes = to_xyxy_frames(&gt_boxes, format)?;
+    let pred_boxes = to_xyxy_frames(&pred_boxes, format)?;
     let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
     Ok(clear::compute_clear(&frames, iou_threshold).into())
 }
@@ -365,14 +401,18 @@ impl From<identity::IdentityMetrics> for IdentityMetrics {
 /// a single global bipartite matching between whole ground-truth and predicted
 /// trajectories, so id consistency over time is rewarded.
 #[pyfunction]
-#[pyo3(signature = (gt_ids, gt_boxes, pred_ids, pred_boxes, iou_threshold=0.5))]
+#[pyo3(signature = (gt_ids, gt_boxes, pred_ids, pred_boxes, iou_threshold=0.5, box_format="xyxy"))]
 fn compute_identity(
     gt_ids: Vec<Vec<i64>>,
-    gt_boxes: Vec<Vec<Bbox>>,
+    gt_boxes: Vec<PyBoxes>,
     pred_ids: Vec<Vec<i64>>,
-    pred_boxes: Vec<Vec<Bbox>>,
+    pred_boxes: Vec<PyBoxes>,
     iou_threshold: f64,
+    box_format: &str,
 ) -> PyResult<IdentityMetrics> {
+    let format = BoxFormat::parse(box_format)?;
+    let gt_boxes = to_xyxy_frames(&gt_boxes, format)?;
+    let pred_boxes = to_xyxy_frames(&pred_boxes, format)?;
     let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
     Ok(identity::compute_identity(&frames, iou_threshold).into())
 }
@@ -464,12 +504,17 @@ impl HotaMetrics {
 /// localization thresholds internally, so unlike the other metrics it takes no
 /// single `iou_threshold`.
 #[pyfunction]
+#[pyo3(signature = (gt_ids, gt_boxes, pred_ids, pred_boxes, box_format="xyxy"))]
 fn compute_hota(
     gt_ids: Vec<Vec<i64>>,
-    gt_boxes: Vec<Vec<Bbox>>,
+    gt_boxes: Vec<PyBoxes>,
     pred_ids: Vec<Vec<i64>>,
-    pred_boxes: Vec<Vec<Bbox>>,
+    pred_boxes: Vec<PyBoxes>,
+    box_format: &str,
 ) -> PyResult<HotaMetrics> {
+    let format = BoxFormat::parse(box_format)?;
+    let gt_boxes = to_xyxy_frames(&gt_boxes, format)?;
+    let pred_boxes = to_xyxy_frames(&pred_boxes, format)?;
     let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
     let m = hota::compute_hota(&frames);
     Ok(HotaMetrics {

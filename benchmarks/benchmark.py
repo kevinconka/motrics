@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import motmetrics as mm
@@ -83,6 +84,11 @@ def _contiguous(frames: list[list[int]]) -> list:
 
 
 def _trackeval_all(seq: Sequence) -> dict[str, float]:
+    """Run TrackEval end-to-end from raw boxes: build the id remapping +
+    similarity matrix, then CLEAR + Identity + HOTA. The prep is inside the
+    timed region on purpose — it is the cost a user actually pays and, being
+    shared across all three metrics (TrackEval builds it once, then loops),
+    cannot be honestly attributed to any single metric."""
     boxes = zip(seq.gt_boxes, seq.pred_boxes, strict=True)
     data = {
         "num_timesteps": seq.num_frames,
@@ -109,6 +115,10 @@ def _trackeval_all(seq: Sequence) -> dict[str, float]:
 
 
 def _motmetrics_all(seq: Sequence) -> dict[str, float]:
+    """Run py-motmetrics end-to-end from raw boxes: build the accumulator (its
+    per-frame update() does the assignment) then compute MOTA + IDF1. Prep is
+    timed for the same reason as TrackEval's — it is the real end-to-end cost
+    and is shared across both metrics."""
     acc = mm.MOTAccumulator(auto_id=True)
     frames = zip(seq.gt_boxes, seq.pred_boxes, seq.gt_ids, seq.pred_ids, strict=True)
     for g, p, gi, pi in frames:
@@ -134,7 +144,86 @@ def _check_parity(results: dict[str, dict[str, float]]) -> list[str]:
     return notes
 
 
-def run(sequences: list[Sequence], repeats: int) -> int:
+def _fmt_ms(seconds: float) -> str:
+    return f"{seconds * 1000:.0f} ms"
+
+
+def _comparison_rows(totals: dict[str, float]) -> list[tuple[str, ...]]:
+    """One row per competitor, comparing motrics against it end-to-end (raw
+    boxes in, metrics out) on exactly the metrics that competitor computes.
+    The expensive IoU + assignment prep is shared across each competitor's
+    metrics, so it can't be split per metric — hence a bundled per-engine
+    comparison rather than a per-metric one."""
+    specs = [
+        (
+            "TrackEval",
+            "CLEAR + Identity + HOTA",
+            totals["motrics_all"],
+            totals["trackeval"],
+        ),
+        (
+            "py-motmetrics",
+            "CLEAR + Identity",
+            totals["motrics_ci"],
+            totals["motmetrics"],
+        ),
+    ]
+    return [
+        (engine, metrics, _fmt_ms(mine), _fmt_ms(other), f"{other / mine:.1f}x")
+        for engine, metrics, mine, other in specs
+    ]
+
+
+def _print_comparison_table(totals: dict[str, float]) -> None:
+    header = ("Engine", "Metrics", "motrics", "this engine", "Speedup")
+    rows = [header, *_comparison_rows(totals)]
+    widths = [max(len(r[i]) for r in rows) for i in range(len(header))]
+    for row in rows:
+        print("  ".join(c.ljust(w) for c, w in zip(row, widths, strict=True)))
+
+
+def _markdown_comparison_table(totals: dict[str, float]) -> list[str]:
+    columns = ["Engine", "Metrics", "motrics", "this engine", "Speedup"]
+    lines = [
+        f"| {' | '.join(columns)} |",
+        f"| {' | '.join(['---', '---', ':---:', ':---:', ':---:'])} |",
+    ]
+    lines += [f"| {' | '.join(row)} |" for row in _comparison_rows(totals)]
+    return lines
+
+
+def _write_markdown(
+    path: Path, rows: list[dict[str, Any]], totals: dict[str, float]
+) -> None:
+    """Render the same numbers `run()` prints as a markdown report (for the CI
+    sticky-comment step); purely a formatting concern, no new computation."""
+    lines = ["### motrics benchmark — MOT17 data", ""]
+    if motrics.is_debug_build():
+        lines += ["> ⚠️ debug build — timings are not meaningful (~10x slower).", ""]
+    lines += [
+        "Wall time summed over every sequence, end-to-end from raw boxes "
+        "(each engine builds its own similarity/accumulator — the cost a user "
+        "actually pays):",
+        "",
+        *_markdown_comparison_table(totals),
+        "",
+        "<details>",
+        "<summary>Per-sequence results</summary>",
+        "",
+        "| Sequence | Frames | GT dets | Pred dets | MOTA | IDF1 | HOTA | Parity |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |",
+    ]
+    for r in rows:
+        parity = "✅" if r["ok"] else "⚠️"
+        lines.append(
+            f"| {r['name']} | {r['frames']} | {r['gt_dets']} | {r['pred_dets']} | "
+            f"{r['mota']:.3f} | {r['idf1']:.3f} | {r['hota']:.3f} | {parity} |"
+        )
+    lines += ["", "</details>", ""]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def run(sequences: list[Sequence], repeats: int, markdown: Path | None = None) -> int:
     if motrics.is_debug_build():
         print(
             "WARNING: debug build — timings are not meaningful (~10x slow). "
@@ -142,8 +231,14 @@ def run(sequences: list[Sequence], repeats: int) -> int:
         )
     print(f"\n{len(sequences)} sequence(s), {repeats} repeat(s)\n")
 
-    motrics_all = motrics_ci = trackeval = motmetrics = 0.0
+    totals = {
+        "motrics_all": 0.0,
+        "motrics_ci": 0.0,
+        "trackeval": 0.0,
+        "motmetrics": 0.0,
+    }
     ok = True
+    rows: list[dict[str, Any]] = []
     for seq in sequences:
         c, t_c = _time(lambda s=seq: _motrics_clear(s), repeats)
         i, t_i = _time(lambda s=seq: _motrics_identity(s), repeats)
@@ -153,26 +248,45 @@ def run(sequences: list[Sequence], repeats: int) -> int:
 
         m = {**c, **i, **h}
         notes = _check_parity({"motrics": m, "trackeval": te, "motmetrics": mmr})
-        ok = ok and not notes
+        seq_ok = not notes
+        ok = ok and seq_ok
         print(
             f"{seq.name}  {seq.num_frames} frames, "
             f"{seq.num_gt_dets} gt / {seq.num_pred_dets} pred  |  "
             f"MOTA={m['MOTA']:.3f} IDF1={m['IDF1']:.3f} HOTA={m['HOTA']:.3f}  |  "
-            f"parity {'OK' if not notes else 'MISMATCH'}"
+            f"parity {'OK' if seq_ok else 'MISMATCH'}"
         )
         for note in notes:
             print(note)
+        rows.append(
+            {
+                "name": seq.name,
+                "frames": seq.num_frames,
+                "gt_dets": seq.num_gt_dets,
+                "pred_dets": seq.num_pred_dets,
+                "mota": m["MOTA"],
+                "idf1": m["IDF1"],
+                "hota": m["HOTA"],
+                "ok": seq_ok,
+            }
+        )
 
-        motrics_all += t_c + t_i + t_h
-        motrics_ci += t_c + t_i
-        trackeval += t_te
-        motmetrics += t_mm
+        # motrics is timed per metric and summed; it rebuilds similarity on
+        # each call rather than sharing it, so this is if anything conservative
+        # in the competitors' favour. motrics_ci is the CLEAR+Identity subset,
+        # for the like-for-like py-motmetrics row (which has no HOTA).
+        totals["motrics_all"] += t_c + t_i + t_h
+        totals["motrics_ci"] += t_c + t_i
+        totals["trackeval"] += t_te
+        totals["motmetrics"] += t_mm
 
     print("\n" + "=" * 60)
-    print(f"Speedup vs motrics over {len(sequences)} sequence(s) (higher = faster):")
-    print(f"  TrackEval      {trackeval / motrics_all:.1f}x  (CLEAR + Identity + HOTA)")
-    print(f"  py-motmetrics  {motmetrics / motrics_ci:.1f}x  (CLEAR + Identity)")
+    print(f"End-to-end over {len(sequences)} sequence(s) (raw boxes in, metrics out):")
+    _print_comparison_table(totals)
     print("=" * 60)
+
+    if markdown is not None:
+        _write_markdown(markdown, rows, totals)
 
     if not ok:
         print("\nPARITY FAILURES DETECTED — see above.")
@@ -184,13 +298,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repeats", type=int, default=5, help="timing repeats")
     parser.add_argument("--smoke", action="store_true", help="single repeat")
+    parser.add_argument(
+        "--markdown",
+        type=Path,
+        default=None,
+        help="also write a markdown report to this path",
+    )
     args = parser.parse_args()
 
     sequences = load_real()
     if not sequences:
         print("error: no sequences found. Run: uv run python benchmarks/download.py")
         return 1
-    return run(sequences, 1 if args.smoke else args.repeats)
+    return run(sequences, 1 if args.smoke else args.repeats, args.markdown)
 
 
 if __name__ == "__main__":

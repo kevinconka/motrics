@@ -44,6 +44,11 @@ def main() -> int:
 
     if args.clean and REAL_DIR.exists():
         shutil.rmtree(REAL_DIR)
+    elif any(REAL_DIR.glob("*/gt/gt.txt")):
+        print(
+            f"{REAL_DIR} already populated, skipping download (use --clean to refetch)"
+        )
+        return 0
     REAL_DIR.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:

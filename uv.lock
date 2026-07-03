@@ -596,12 +596,14 @@ wheels = [
 [[package]]
 name = "motrics"
 source = { editable = "." }
-
-[package.optional-dependencies]
-compat = [
+dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+
+[package.optional-dependencies]
+compat = [
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
@@ -623,7 +625,7 @@ parity = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy", marker = "extra == 'compat'", specifier = ">=1.24" },
+    { name = "numpy", specifier = ">=1.24" },
     { name = "pandas", marker = "extra == 'compat'", specifier = ">=2.0" },
 ]
 provides-extras = ["compat"]
