@@ -22,7 +22,12 @@ from motrics._motrics import (
     match_boxes,
     version,
 )
-from motrics.motchallenge import align_frames, load_motchallenge
+from motrics.motchallenge import (
+    align_frames,
+    load_motchallenge,
+    load_motchallenge_gt,
+    preprocess_motchallenge,
+)
 
 __all__ = [
     "ClearMetrics",
@@ -40,6 +45,8 @@ __all__ = [
     "iou_matrix",
     "is_debug_build",
     "load_motchallenge",
+    "load_motchallenge_gt",
     "match_boxes",
+    "preprocess_motchallenge",
     "version",
 ]

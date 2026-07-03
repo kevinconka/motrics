@@ -23,6 +23,10 @@ Exact numeric parity is also checked on synthetic sequences in
 
 ## Notes
 
+- **Ground truth is preprocessed.** `fixtures.load_real()` runs gt.txt through
+  `preprocess_motchallenge` (distractor-class removal, pedestrian-only, "do
+  not consider" rows dropped) before scoring, matching what TrackEval's own
+  `MotChallenge2DBox` evaluates rather than raw box IoU.
 - **Tie-breaking, not a bug.** On dense real sequences, Hungarian assignment
   ties are resolved differently by each solver (`lsap` vs `scipy`), shifting a
   couple of matches/switches out of thousands (e.g. IDSW 70 vs 72 with

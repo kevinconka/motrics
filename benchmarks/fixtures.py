@@ -82,14 +82,21 @@ def make_synthetic() -> list[Sequence]:
 
 
 def load_real() -> list[Sequence]:
-    """Real sequences from ``data/real/<seq>/`` (see download.py)."""
+    """Real sequences from ``data/real/<seq>/`` (see download.py).
+
+    Ground truth is filtered through ``preprocess_motchallenge`` (distractor
+    removal, pedestrian-only, "do not consider" rows dropped) so these numbers
+    reflect what TrackEval actually evaluates, not raw box IoU.
+    """
     if not REAL_DIR.exists():
         return []
     seqs = []
     for d in sorted(p for p in REAL_DIR.iterdir() if p.is_dir()):
         gt_file, pred_file = d / "gt" / "gt.txt", d / "pred.txt"
         if gt_file.is_file() and pred_file.is_file():
-            gt = motrics.load_motchallenge(gt_file)
+            gt = motrics.load_motchallenge_gt(gt_file)
             pred = motrics.load_motchallenge(pred_file)
-            seqs.append(Sequence(d.name, *motrics.align_frames(gt, pred)))
+            benchmark = d.name.split("-")[0]  # e.g. "MOT17" from "MOT17-02-FRCNN"
+            args = motrics.preprocess_motchallenge(gt, pred, benchmark=benchmark)
+            seqs.append(Sequence(d.name, *args))
     return seqs

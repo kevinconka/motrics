@@ -48,6 +48,70 @@ def test_align_frames_pads_missing(tmp_path: Path) -> None:
     assert len(gt_boxes) == len(pred_boxes) == 2
 
 
+def test_load_motchallenge_gt_reads_class_and_consider_flag(tmp_path: Path) -> None:
+    # frame, id, left, top, w, h, consider, class, visibility.
+    text = "1,1,0,0,10,10,1,1,1.0\n1,2,20,20,10,10,0,8,1.0\n"
+    path = _write(tmp_path, "gt.txt", text)
+    ids, _boxes, classes, keep = motrics.load_motchallenge_gt(path)[1]
+    assert ids == [1, 2]
+    assert classes == [1, 8]
+    assert keep == [True, False]
+
+
+def test_preprocess_motchallenge_drops_pred_matched_to_distractor(
+    tmp_path: Path,
+) -> None:
+    gt = {
+        1: (
+            [1, 2],
+            [(0.0, 0.0, 10.0, 10.0), (20.0, 20.0, 30.0, 30.0)],
+            [1, 8],
+            [True, True],
+        )
+    }
+    pred = {
+        1: (
+            [10, 20, 30],
+            [
+                (0.0, 0.0, 10.0, 10.0),
+                (20.0, 20.0, 30.0, 30.0),
+                (100.0, 100.0, 110.0, 110.0),
+            ],
+        )
+    }
+    gt_ids, _gt_boxes, pred_ids, _pred_boxes = motrics.preprocess_motchallenge(gt, pred)
+    assert gt_ids == [[1]]  # distractor (2) dropped
+    assert pred_ids == [[10, 30]]  # pred matched to the distractor (20) dropped
+
+
+def test_preprocess_motchallenge_drops_do_not_consider_gt(tmp_path: Path) -> None:
+    gt = {1: ([1], [(0.0, 0.0, 10.0, 10.0)], [1], [False])}
+    pred = {1: ([10], [(0.0, 0.0, 10.0, 10.0)])}
+    gt_ids, _gt_boxes, pred_ids, _pred_boxes = motrics.preprocess_motchallenge(gt, pred)
+    assert gt_ids == [[]]
+    assert pred_ids == [[10]]  # not a distractor match, so pred is kept
+
+
+def test_preprocess_motchallenge_mot20_extra_distractor_class(tmp_path: Path) -> None:
+    gt = {
+        1: (
+            [1, 2],
+            [(0.0, 0.0, 10.0, 10.0), (20.0, 20.0, 30.0, 30.0)],
+            [1, 6],
+            [True, True],
+        )
+    }
+    pred = {1: ([10, 20], [(0.0, 0.0, 10.0, 10.0), (20.0, 20.0, 30.0, 30.0)])}
+    _, _, mot17_pred_ids, _ = motrics.preprocess_motchallenge(
+        gt, pred, benchmark="MOT17"
+    )
+    _, _, mot20_pred_ids, _ = motrics.preprocess_motchallenge(
+        gt, pred, benchmark="MOT20"
+    )
+    assert mot17_pred_ids == [[10, 20]]  # class 6 isn't a distractor for MOT17
+    assert mot20_pred_ids == [[10]]  # ... but is for MOT20
+
+
 def test_end_to_end_perfect_sequence(tmp_path: Path) -> None:
     # Identical gt and prediction -> perfect scores across every metric.
     gt = motrics.load_motchallenge(_write(tmp_path, "gt.txt", GT_TEXT))

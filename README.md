@@ -48,7 +48,10 @@ hota = motrics.compute_hota(gt_ids, gt_boxes, pred_ids, pred_boxes)
 print(clear.mota, identity.idf1, hota.hota)
 ```
 
-Boxes use the `xyxy` convention `(x1, y1, x2, y2)`.
+Boxes use the `xyxy` convention `(x1, y1, x2, y2)`. Want numbers matching
+TrackEval's own reported values (pedestrian-only, distractor-aware)? Use
+`load_motchallenge_gt` + `preprocess_motchallenge` instead of
+`load_motchallenge` + `align_frames`.
 
 ## Migrating from py-motmetrics
 
@@ -131,14 +134,15 @@ it yourself.
         needed, and the first slice of "broaden core inputs" below.
   - [x] `motrics.compat.motmetrics` — a drop-in `MOTAccumulator` replacement.
   - [x] Migration guide + metric-name map (see above).
+  - [x] MOTChallenge ingest with TrackEval-parity preprocessing
+        (`load_motchallenge_gt` + `preprocess_motchallenge`: distractor-class
+        removal, pedestrian-only, "do not consider" rows dropped) — validated
+        against TrackEval's own `get_preprocessed_seq_data`, and now what the
+        real-data benchmark uses. The enabling piece for `compat.trackeval`.
   - [ ] `motrics.compat.trackeval` — a drop-in for the MOTChallenge evaluation
-        path (`Evaluator`/dataset/metrics), no TrackEval installed. Gated on
-        TrackEval-parity MOTChallenge preprocessing below.
+        path (`Evaluator`/dataset/metrics), no TrackEval installed.
   - [ ] Broaden core inputs further (`xywh` boxes, zero-copy NumPy) so users
         pass what they already hold.
-  - [ ] MOTChallenge ingest with TrackEval-parity preprocessing (confidence,
-        class/distractor/ignore-region handling) — the enabling piece for
-        `compat.trackeval` and for numbers matching TrackEval's reported values.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
       benchmark (ingest + preprocessing + similarity), added incrementally:
   - [ ] Box-IoU adapters (DanceTrack, KITTI 2D-box, …) — reuse the existing IoU
