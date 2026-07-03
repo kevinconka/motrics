@@ -1,4 +1,3 @@
 [workspace]
-# motrics isn't published to any cargo registry; git_only makes git tags
-# (not the registry) the source of truth for the current version.
-git_only = true
+# motrics isn't published to any cargo registry.
+publish = false
