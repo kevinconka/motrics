@@ -1,6 +1,7 @@
 # motrics
 
 [![CI](https://github.com/kevinconka/motrics/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinconka/motrics/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/motrics)](https://pypi.org/project/motrics/)
 [![License](https://img.shields.io/github/license/kevinconka/motrics)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -10,8 +11,8 @@ An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
 
 ## Highlights
 
-- ⚡ **Extremely fast** — Rust core, ~3–14× faster than TrackEval and
-  py-motmetrics on real MOT17 data.
+- ⚡ **Extremely fast** — Rust core, ~7–9× faster than TrackEval and ~12–16×
+  faster than py-motmetrics on real MOT17 data.
 - 🎯 **Numerically validated** — exact parity with TrackEval on CLEAR,
   Identity, and HOTA, checked in CI.
 - 🔄 **Drop-in migration** — swap one import to replace py-motmetrics; evaluate
@@ -23,13 +24,12 @@ An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
 
 ## Install
 
-Not on PyPI yet — build from source:
-
 ```bash
-uv sync --group dev        # create the environment + install dev tools
-uv run maturin develop     # compile the Rust extension into the venv
-uv run python -c "import motrics; print(motrics.version())"
+pip install motrics
 ```
+
+Prebuilt wheels for Linux, macOS, and Windows (Python 3.10+). Building from
+source instead? See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup.
 
 ## Quickstart
 
@@ -50,23 +50,19 @@ result = motrics.evaluate(
 print(result.clear.mota, result.identity.idf1, result.hota.hota)
 ```
 
-`evaluate()` builds the gt/pred similarity matrix once and shares it across
-CLEAR, Identity, and HOTA, instead of recomputing it per metric. Only need one
-metric? `compute_clear`/`compute_identity`/`compute_hota` take the same
-`gt_ids, gt_boxes, pred_ids, pred_boxes` directly, without a `Frames` wrapper.
+- Only need one metric? `compute_clear`/`compute_identity`/`compute_hota` take
+  the same four arguments directly, no `Frames` needed.
+- Boxes: `xyxy` by default, `box_format="xywh"` for the alternative; NumPy
+  `(N, 4)` arrays accepted too.
+- Want TrackEval's exact reported numbers? Use `load_motchallenge_gt` +
+  `preprocess_motchallenge` instead of `load_motchallenge` + `align_frames`.
 
-Boxes default to the `xyxy` convention `(x1, y1, x2, y2)`; pass
-`box_format="xywh"` for `(x, y, width, height)` instead. Each frame's boxes
-can also be a `(N, 4)` float64 NumPy array — a contiguous `xyxy` array is read
-with zero copies, no per-box Python overhead.
+## Migrating from py-motmetrics or TrackEval
 
-Want numbers matching TrackEval's own reported values (pedestrian-only,
-distractor-aware)? Use `load_motchallenge_gt` + `preprocess_motchallenge`
-instead of `load_motchallenge` + `align_frames`.
+Swap one import — the rest of your code is unchanged.
 
-## Migrating from py-motmetrics
-
-Swap the import — the rest of your accumulator code is unchanged:
+<details>
+<summary>py-motmetrics</summary>
 
 ```python
 # before
@@ -83,20 +79,20 @@ for gt_ids, gt_boxes, pred_ids, pred_boxes in sequence:
 summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="acc")
 ```
 
-- `pip install motrics[compat]` (pulls in pandas, needed only for this
-  subpackage).
-- Supported: `mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`,
-  `num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects` —
-  the same names py-motmetrics uses.
-- Not yet implemented: per-trajectory metrics (mostly-tracked, fragmentations,
-  transfer/ascend/migrate). Requesting them raises `NotImplementedError`
-  naming exactly what's missing, rather than a silently wrong number.
-- See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
-  for what else differs (e.g. no `events`/`mot_events` DataFrame).
+`pip install motrics[compat]` (pulls in pandas, needed only for this subpackage).
 
-## Migrating from TrackEval
+| | |
+| --- | --- |
+| ✅ Supported | `mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`, `num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects` |
+| ❌ Not yet | Per-trajectory metrics (mostly-tracked, fragmentations, transfer/ascend/migrate) — raises `NotImplementedError` naming what's missing |
 
-Swap the import — the rest of your evaluation script is unchanged:
+See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
+for what else differs (e.g. no `events`/`mot_events` DataFrame).
+
+</details>
+
+<details>
+<summary>TrackEval</summary>
 
 ```python
 # before
@@ -119,25 +115,19 @@ results, messages = evaluator.evaluate(dataset_list, metrics_list)
 print(results["MotChallenge2DBox"]["my_tracker"]["COMBINED_SEQ"]["pedestrian"]["CLEAR"]["MOTA"])
 ```
 
-Same class names, config keys, directory/seqmap conventions
-(`GT_FOLDER/BENCHMARK-SPLIT/<seq>/gt/gt.txt`, a seqmap file, per-sequence
-`seqinfo.ini`), and result shape as real TrackEval, no `trackeval`/`scipy`
-install required — but only for the subset below. `HOTA`, `Identity`, and
-`CLEAR`'s `MOTA`/`MOTP` fields are verified bit-exact against real TrackEval;
-unsupported config or fields raise rather than silently returning a wrong
-number.
+Same class names, config keys, directory/seqmap conventions, and result shape
+as real TrackEval — no `trackeval`/`scipy` install required, only `numpy` (a
+core dependency already).
 
-- No extra needed — this subpackage relies only on `numpy` (a core
-  dependency), whose arrays back HOTA's per-alpha fields, matching TrackEval.
-- Not implemented: parallel evaluation, error-handling config
-  (`BREAK_ON_ERROR`/etc. — always raises immediately), printing/file
-  output/plotting; zipped input (`INPUT_AS_ZIP`); `DO_PREPROC=False` and
-  `BENCHMARK="MOT15"` (raise at construction); `CLEAR` fields beyond
-  `MOTA`/`MOTP` (`MT`/`PT`/`ML`/`Frag`/`MODA`/`sMOTA`/etc. need
-  mostly-tracked/lost and fragmentation bookkeeping the Rust core doesn't
-  compute yet); `IDEucl`/`JAndF`/`TrackMAP`/`VACE` metrics.
-- See [`python/motrics/compat/trackeval/`](python/motrics/compat/trackeval/)
-  for the full list of what differs from real TrackEval.
+| | |
+| --- | --- |
+| ✅ Supported | `HOTA`, `Identity`, `CLEAR`'s `MOTA`/`MOTP` — bit-exact vs real TrackEval |
+| ❌ Not yet | Parallel evaluation · `BREAK_ON_ERROR` config · printing/plotting · zipped input · `DO_PREPROC=False` · `MOT15` · extra `CLEAR` fields (`MT`/`PT`/`ML`/`Frag`/etc.) · `IDEucl`/`JAndF`/`TrackMAP`/`VACE` |
+
+See [`python/motrics/compat/trackeval/`](python/motrics/compat/trackeval/)
+for the full list of what differs from real TrackEval.
+
+</details>
 
 <details>
 <summary>Metric name map — TrackEval / py-motmetrics / motrics' native API</summary>
@@ -160,14 +150,15 @@ per-frame Python bookkeeping)? Here's how the field names line up:
 
 ## Benchmarks
 
-On real MOT17 data, release build:
+On real MOT17 data, release build, end-to-end from raw boxes:
 
-| motrics vs…   | CLEAR + Identity | With HOTA |
-| ------------- | ---------------- | --------- |
-| TrackEval     | ~3–4×            | ~6×       |
-| py-motmetrics | ~14×             | —         |
+| motrics vs…   | Metrics                | Speedup |
+| ------------- | ----------------------- | ------- |
+| TrackEval     | CLEAR + Identity + HOTA | ~7–9×   |
+| py-motmetrics | CLEAR + Identity        | ~12–16× |
 
-Numbers are illustrative and machine-dependent. See
+Numbers are illustrative and machine-dependent — see the CI benchmark comment
+on any PR for a live measurement. See
 [`benchmarks/README.md`](benchmarks/README.md) for methodology and how to run
 it yourself.
 
@@ -175,6 +166,8 @@ it yourself.
 <summary>Roadmap</summary>
 
 - [x] Project scaffolding (build, lint, packaging, CI)
+- [x] Published to PyPI (`pip install motrics`), automated releases via
+      [release-plz](https://release-plz.dev/)
 - [x] Bounding-box IoU + assignment (Hungarian/greedy) primitives
 - [x] CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
 - [x] Identity metrics (IDF1 / IDP / IDR)
