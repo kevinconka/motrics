@@ -1,4 +1,5 @@
 [workspace]
-# motrics isn't published to any cargo registry; git_only makes git tags
-# (not the registry) the source of truth for the current version.
-git_only = true
+# motrics isn't published to any cargo registry. git_only (release-plz#2693)
+# still attempted `cargo publish` and failed on the first real run; plain
+# publish=false is the older, more established flag for this.
+publish = false
