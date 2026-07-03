@@ -69,15 +69,16 @@ for gt_ids, gt_boxes, pred_ids, pred_boxes in sequence:
 summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="acc")
 ```
 
-`pip install motrics[compat]` (pulls in pandas, needed only for this
-subpackage). Supported metric names — `mota`, `motp`, `idf1`, `idp`, `idr`,
-`recall`, `precision`, `num_false_positives`, `num_misses`, `num_switches`,
-`num_unique_objects` — are the same ones py-motmetrics uses. Per-trajectory
-metrics (mostly-tracked, fragmentations, transfer/ascend/migrate) aren't
-implemented yet; requesting them raises `NotImplementedError` naming exactly
-what's missing, rather than a silently wrong number. See
-[`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/) for
-what else differs (e.g. no `events`/`mot_events` DataFrame).
+- `pip install motrics[compat]` (pulls in pandas, needed only for this
+  subpackage).
+- Supported: `mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`,
+  `num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects` —
+  the same names py-motmetrics uses.
+- Not yet implemented: per-trajectory metrics (mostly-tracked, fragmentations,
+  transfer/ascend/migrate). Requesting them raises `NotImplementedError`
+  naming exactly what's missing, rather than a silently wrong number.
+- See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
+  for what else differs (e.g. no `events`/`mot_events` DataFrame).
 
 <details>
 <summary>Metric name map — TrackEval / py-motmetrics / motrics' native API</summary>
