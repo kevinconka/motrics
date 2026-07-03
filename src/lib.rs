@@ -73,12 +73,8 @@ fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-/// Whether the extension was compiled with debug assertions.
-///
-/// A debug build is roughly an order of magnitude slower than a release build,
-/// so any performance measurement (see `benchmarks/`) should run against a
-/// release build (`maturin develop --release`). This lets callers detect and
-/// warn about an unoptimized build.
+/// Whether the extension was compiled with debug assertions (used to warn
+/// before reporting benchmark timings — a debug build is far slower).
 #[pyfunction]
 fn is_debug_build() -> bool {
     cfg!(debug_assertions)

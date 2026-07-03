@@ -76,39 +76,23 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 
 ### Benchmarks
 
-The `benchmarks/` suite validates numeric parity and measures speed against
+`benchmarks/` checks numeric parity and measures speed against
 [TrackEval](https://github.com/JonathonLuiten/TrackEval) and
-[py-motmetrics](https://github.com/cheind/py-motmetrics) on shared
-MOTChallenge-format sequences:
+[py-motmetrics](https://github.com/cheind/py-motmetrics):
 
 ```bash
-uv sync --group parity && uv run maturin develop --release --uv  # release build!
-uv run python benchmarks/benchmark.py            # synthetic fixtures (auto-generated)
+uv sync --group parity && uv run maturin develop --release --uv
+uv run python benchmarks/benchmark.py
 ```
 
-It runs on synthetic fixtures out of the box — generated on demand, offline and
-reproducible. For real MOTChallenge sequences, fetch them first (needs network +
-accepting the dataset license) and rerun:
+Roughly how much faster motrics is (release build; illustrative, machine-dependent):
 
-```bash
-uv run python benchmarks/download.py --dataset MOT15
-uv run python benchmarks/benchmark.py            # auto-detects data/real/
-```
+| motrics vs…   | CLEAR + Identity | With HOTA |
+| ------------- | ---------------- | --------- |
+| TrackEval     | ~6×              | ~13×      |
+| py-motmetrics | ~27×             | —         |
 
-Results are validated for **numeric parity** against both references (a hard CI
-gate) before any timing is reported. On a release build, over the three
-synthetic fixtures (30 / 150 / 500 frames; up to ~9k detections), **how much
-faster motrics is** than each reference:
-
-| motrics vs…   | CLEAR + Identity | Full pipeline (with HOTA) |
-| ------------- | ---------------- | ------------------------- |
-| TrackEval     | **~6× faster**   | **~13× faster**           |
-| py-motmetrics | **~27× faster**  | _n/a — no HOTA_           |
-
-Numbers are illustrative and machine-dependent; this is a conservative,
-metrics-only comparison (TrackEval is handed pre-aligned arrays, so real-world
-gains are typically larger). See
-[`benchmarks/README.md`](benchmarks/README.md) for methodology and flags.
+See [`benchmarks/README.md`](benchmarks/README.md) for details and real-data runs.
 
 ## Roadmap
 
@@ -119,19 +103,15 @@ gains are typically larger). See
 - [x] HOTA (DetA, AssA, alpha sweep)
 - [x] MOTChallenge ingest + integration tests
 - [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
-- [x] Benchmark & parity infrastructure — parity and benchmarks now share
-      MOTChallenge-format fixtures (`benchmarks/data/`, generated on demand and
-      loaded through `motrics.load_motchallenge`); a reproducible `benchmarks/`
-      suite validates numeric parity against **TrackEval** and **py-motmetrics**
-      and measures speedups, running on the fixtures in CI. See
-      [`benchmarks/README.md`](benchmarks/README.md).
-  - [ ] Speedup/parity numbers on **real** MOTChallenge sequences — fetch with
-        `benchmarks/download.py`, then rerun the suite. Needs network access to
-        `motchallenge.net` (blocked in the dev sandbox; available in CI or a
-        permissioned local session).
-  - [ ] Zero-copy NumPy input path — the current API takes Python lists and
-        recomputes IoU per metric call; accepting arrays and sharing one
-        similarity matrix across metrics is the next perf lever.
+- [x] Benchmark & parity infrastructure — parity and the `benchmarks/` suite
+      share one set of sequences and validate motrics against **TrackEval** and
+      **py-motmetrics** (parity in CI). See [`benchmarks/README.md`](benchmarks/README.md).
+  - [ ] Speed/parity on **real** MOTChallenge sequences — `benchmarks/download.py`
+        fetches TrackEval's data bundle, then rerun the suite. The download host
+        is blocked in the dev sandbox and was unreachable from GitHub-hosted CI
+        in testing; run locally or from a self-hosted/permissioned runner.
+  - [ ] Zero-copy NumPy input path — accepting arrays and sharing one similarity
+        matrix across metrics is the next perf lever.
 
 ## License
 

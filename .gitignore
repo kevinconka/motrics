@@ -221,7 +221,5 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Benchmark data — all generated, none committed. Synthetic fixtures are
-# reproduced by benchmarks/generate_fixtures.py; real MOTChallenge sequences
-# (large, non-redistributable — CC BY-NC-SA) are fetched by benchmarks/download.py.
+# Downloaded benchmark data (see benchmarks/download.py).
 benchmarks/data/

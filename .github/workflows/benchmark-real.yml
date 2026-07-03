@@ -1,61 +1,37 @@
 name: Benchmark (real data)
 
-# Opt-in: downloads a real MOTChallenge dataset and runs the parity + speed
-# benchmark on it. NOT part of PR/push CI — real datasets are large and under a
-# research, non-redistribution license (CC BY-NC-SA), so this runs only on
-# manual dispatch or a weekly schedule.
+# Opt-in: downloads real MOTChallenge sequences and benchmarks on them. Off the
+# PR/push path — runs on manual dispatch or weekly.
 on:
   workflow_dispatch:
     inputs:
-      dataset:
-        description: MOTChallenge dataset to download
-        default: MOT15
-        type: choice
-        options: [MOT15, MOT16, MOT17, MOT20]
-      sequences:
-        description: Space-separated sequence names (blank = all with ground truth)
-        default: ""
+      split:
+        description: MOTChallenge split to benchmark
+        default: MOT17-train
         type: string
   schedule:
-    - cron: "23 5 * * 1" # weekly, Monday ~05:23 UTC
-  # TEMPORARY: verify motchallenge.net is reachable from CI on this branch.
-  # Remove once the run has gone green.
+    - cron: "23 5 * * 1"
+  # TEMPORARY: verify the download host is reachable from CI. Remove once green.
   push:
     branches: [claude/checklist-completion-si092y]
 
 permissions:
   contents: read
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   benchmark-real:
-    name: Benchmark on real MOTChallenge data
+    name: Real data
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
           enable-cache: true
-      - name: Sync dev + parity dependencies
-        run: uv sync --group dev --group parity
-      - name: Build extension (release) into the venv
-        run: uv run maturin develop --release --uv
-      - name: Download real sequences
-        env:
-          DATASET: ${{ inputs.dataset }}
-          SEQUENCES: ${{ inputs.sequences }}
-        run: |
-          args=(--dataset "${DATASET:-MOT15}")
-          if [ -n "${SEQUENCES}" ]; then
-            args+=(--sequences ${SEQUENCES})
-          fi
-          uv run python benchmarks/download.py "${args[@]}"
-      - name: Benchmark on real data (parity gate + timing)
-        run: uv run python benchmarks/benchmark.py --repeats 3
+      - run: uv sync --group dev --group parity
+      - run: uv run maturin develop --release --uv
+      - run: uv run python benchmarks/download.py --split "${{ inputs.split || 'MOT17-train' }}"
+      - run: uv run python benchmarks/benchmark.py --repeats 3

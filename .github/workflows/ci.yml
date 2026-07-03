@@ -18,7 +18,7 @@ env:
 
 jobs:
   rust:
-    name: Rust (fmt · clippy · test)
+    name: Rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,66 +26,44 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: rustfmt
-        run: cargo fmt --all --check
-      - name: clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-      - name: test
-        run: cargo test --all-features
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --all-features
 
   python:
-    name: Python (ruff · ty · pytest)
+    name: Python
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # abi3-py310 wheel + a tiny pure-Python surface, so the min and max
-      # supported versions cover the meaningful ends.
       matrix:
-        python-version: ["3.10", "3.13"]
+        python-version: ["3.10", "3.13"] # abi3-py310: min + max cover it
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Sync dev dependencies
-        run: uv sync --group dev
-      - name: ruff check
-        run: uv run ruff check .
-      - name: ruff format --check
-        run: uv run ruff format --check .
-      - name: Build extension into the venv
-        run: uv run maturin develop --uv
-      - name: ty check
-        run: uv run ty check
-      - name: pytest
-        run: uv run pytest
+      - run: uv sync --group dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run maturin develop --uv
+      - run: uv run ty check
+      - run: uv run pytest
 
   parity:
-    name: Parity & benchmark (vs TrackEval · py-motmetrics)
+    name: Parity & benchmark
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
           enable-cache: true
-      - name: Sync dev + parity dependencies
-        run: uv sync --group dev --group parity
-      # Release build — a debug build is ~10x slower, so the benchmark timings
-      # would be meaningless (the benchmark warns loudly if it detects one).
-      - name: Build extension (release) into the venv
-        run: uv run maturin develop --release --uv
-      # Rigorous numeric parity vs TrackEval (exact counts, per-alpha curves).
-      - name: pytest (parity vs TrackEval)
-        run: uv run pytest tests/test_parity.py -v
-      # Cross-engine parity gate (adds py-motmetrics) + timing, on the synthetic
-      # fixtures (no network). Fails on any numeric mismatch.
-      - name: Benchmark on fixtures (parity gate + timing)
-        run: uv run python benchmarks/benchmark.py --repeats 3
+      - run: uv sync --group dev --group parity
+      - run: uv run maturin develop --release --uv # release: debug is ~10x slower
+      - run: uv run pytest # parity tests activate once TrackEval is installed
+      - run: uv run python benchmarks/benchmark.py --repeats 3

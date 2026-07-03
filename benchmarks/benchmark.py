@@ -1,31 +1,13 @@
 #!/usr/bin/env python3
-"""Benchmark ``motrics`` against reference implementations on MOTChallenge data.
+"""Benchmark motrics against TrackEval and py-motmetrics.
 
-For each sequence the suite runs three metric families — CLEAR (MOTA/MOTP),
-Identity (IDF1) and HOTA — through every available engine, checks the numbers
-agree, and times each end-to-end (from frame-aligned detections to metrics,
-including each engine's own similarity computation).
+For each sequence, CLEAR / Identity / HOTA are run through every available
+engine, checked for agreement (a parity gate) and timed end-to-end. TrackEval
+and py-motmetrics are optional (``uv sync --group parity``). Uses real data from
+``benchmarks/data/real`` when present (see download.py), else synthetic
+sequences. Build in release mode — a debug build is ~10x slower.
 
-Engines:
-
-* **motrics**   — this library (Rust core).
-* **TrackEval** — the reference MOT evaluator; CLEAR + Identity + HOTA.
-* **py-motmetrics** — the classic Python evaluator; CLEAR + Identity (no HOTA).
-
-TrackEval and py-motmetrics are optional (``uv sync --group parity``); each is
-skipped with a note if it is not importable.
-
-Data selection: real MOTChallenge sequences under ``benchmarks/data/real`` are
-used when present; otherwise the synthetic fixtures in ``benchmarks/data``
-(generated on demand) provide a reproducible, offline baseline. Fetch real data
-with ``benchmarks/download.py`` (needs network + accepting the dataset
-license).
-
-Usage::
-
-    uv run python benchmarks/benchmark.py                 # auto: real else fixtures
-    uv run python benchmarks/benchmark.py --data path/to/dataset
-    uv run python benchmarks/benchmark.py --repeats 10 --smoke
+    uv run python benchmarks/benchmark.py [--repeats N] [--smoke]
 """
 
 from __future__ import annotations
@@ -33,7 +15,6 @@ from __future__ import annotations
 import argparse
 import time
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import motrics
@@ -262,12 +243,8 @@ def _fmt_ms(seconds: float) -> str:
 def run(sequences: list[Sequence], kind: str, repeats: int) -> int:
     if motrics.is_debug_build():
         print(
-            "\n"
-            "  ╔══════════════════════════════════════════════════════════════╗\n"
-            "  ║  WARNING: motrics is a DEBUG build — timings are NOT valid.   ║\n"
-            "  ║  A debug build is ~10x slower. Rebuild in release mode:       ║\n"
-            "  ║      uv run maturin develop --release --uv                    ║\n"
-            "  ╚══════════════════════════════════════════════════════════════╝"
+            "WARNING: debug build — timings are not meaningful (~10x slow). "
+            "Rebuild: uv run maturin develop --release --uv"
         )
 
     engines = ["motrics"]
@@ -383,42 +360,19 @@ def run(sequences: list[Sequence], kind: str, repeats: int) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--data",
-        type=Path,
-        default=None,
-        help="dataset root (default: real sequences if present, else fixtures)",
+        "--repeats", type=int, default=5, help="timing repeats (best time is reported)"
     )
     parser.add_argument(
-        "--repeats",
-        type=int,
-        default=5,
-        help="timing repeats per engine/metric (best time is reported)",
-    )
-    parser.add_argument(
-        "--min-confidence",
-        type=float,
-        default=None,
-        help="drop tracker detections below this confidence",
-    )
-    parser.add_argument(
-        "--smoke",
-        action="store_true",
-        help="fast run (1 repeat) that just verifies the suite works",
+        "--smoke", action="store_true", help="single repeat, just verify it runs"
     )
     args = parser.parse_args()
 
     if np is None:
-        print("error: numpy is required to run the benchmark (uv sync --group parity)")
+        print("error: numpy is required (uv sync --group parity)")
         return 1
 
-    repeats = 1 if args.smoke else args.repeats
-    sequences, kind = load_dataset(args.data, min_confidence=args.min_confidence)
-    if not sequences:
-        print("error: no sequences found. Generate fixtures with:")
-        print("  uv run python benchmarks/generate_fixtures.py")
-        return 1
-
-    return run(sequences, kind, repeats)
+    sequences, kind = load_dataset()
+    return run(sequences, kind, 1 if args.smoke else args.repeats)
 
 
 if __name__ == "__main__":

@@ -1,33 +1,25 @@
-"""Shared dataset discovery and loading for the benchmark suite.
+"""Sequences shared by the benchmark and the parity tests.
 
-A *dataset* is a directory of sequence sub-directories, each laid out in the
-MOTChallenge convention::
-
-    <sequence>/gt/gt.txt     # ground truth
-    <sequence>/pred.txt      # tracker results
-
-Both the synthetic fixtures (``benchmarks/data``) and real MOTChallenge
-sequences fetched by ``download.py`` (``benchmarks/data/real``) use this layout,
-so the benchmark loads either through one code path — the public
-``motrics.load_motchallenge`` / ``motrics.align_frames`` readers.
+`make_synthetic()` builds deterministic in-memory sequences (no files, no
+network); `load_real()` reads real MOTChallenge sequences fetched by
+`download.py`. `load_dataset()` prefers real data when present.
 """
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
 import motrics
 
-DATA_DIR = Path(__file__).parent / "data"
-REAL_DIR = DATA_DIR / "real"
-
+REAL_DIR = Path(__file__).parent / "data" / "real"
 Bbox = tuple[float, float, float, float]
 
 
 @dataclass(frozen=True)
 class Sequence:
-    """One frame-aligned sequence, ready for the metric functions."""
+    """Frame-aligned ground-truth and predictions, ready for the metric functions."""
 
     name: str
     gt_ids: list[list[int]]
@@ -48,61 +40,62 @@ class Sequence:
         return sum(len(f) for f in self.pred_ids)
 
 
-def load_sequence(seq_dir: Path, *, min_confidence: float | None = None) -> Sequence:
-    """Load one ``<sequence>/{gt/gt.txt,pred.txt}`` directory into a `Sequence`."""
-    gt = motrics.load_motchallenge(seq_dir / "gt" / "gt.txt")
-    pred = motrics.load_motchallenge(
-        seq_dir / "pred.txt", min_confidence=min_confidence
-    )
-    gt_ids, gt_boxes, pred_ids, pred_boxes = motrics.align_frames(gt, pred)
-    return Sequence(seq_dir.name, gt_ids, gt_boxes, pred_ids, pred_boxes)
+# name, frames, objects, seed — one small, one medium, one large.
+_SPECS = [
+    ("synth-small", 30, 6, 1),
+    ("synth-medium", 150, 12, 2),
+    ("synth-large", 300, 15, 3),
+]
 
 
-def discover_sequences(root: Path) -> list[Path]:
-    """Return sequence directories under ``root`` (those with ``gt/gt.txt``)."""
-    if not root.exists():
+def _make(name: str, n_frames: int, n_obj: int, seed: int) -> Sequence:
+    """Objects drift right; the tracker mostly detects them with jitter, and now
+    and then misses one, swaps an id, or emits a false positive."""
+    rng = random.Random(seed)
+    w = h = 40.0
+    gt_ids, gt_boxes, pred_ids, pred_boxes = [], [], [], []
+    for t in range(n_frames):
+        gi, gb, pi, pb = [], [], [], []
+        for o in range(n_obj):
+            if rng.random() < 0.92:
+                x, y = 30.0 * o + 1.5 * t, 50.0 + 5.0 * ((o + t) % 7)
+                gi.append(o)
+                gb.append((x, y, x + w, y + h))
+                if rng.random() < 0.85:
+                    jx, jy = rng.uniform(-6, 6), rng.uniform(-6, 6)
+                    pi.append(o if rng.random() > 0.04 else o + 1000)
+                    pb.append((x + jx, y + jy, x + jx + w, y + jy + h))
+        if rng.random() < 0.25:
+            fx, fy = rng.uniform(0, 600), rng.uniform(300, 400)
+            pi.append(5000 + t)
+            pb.append((fx, fy, fx + w, fy + h))
+        gt_ids.append(gi)
+        gt_boxes.append(gb)
+        pred_ids.append(pi)
+        pred_boxes.append(pb)
+    return Sequence(name, gt_ids, gt_boxes, pred_ids, pred_boxes)
+
+
+def make_synthetic() -> list[Sequence]:
+    """Deterministic synthetic sequences, generated in memory."""
+    return [_make(*spec) for spec in _SPECS]
+
+
+def load_real() -> list[Sequence]:
+    """Real sequences from ``data/real/<seq>/`` (see download.py)."""
+    if not REAL_DIR.exists():
         return []
-    seqs = [
-        child
-        for child in sorted(root.iterdir())
-        if child.is_dir()
-        and child.name != "real"
-        and (child / "gt" / "gt.txt").is_file()
-        and (child / "pred.txt").is_file()
-    ]
+    seqs = []
+    for d in sorted(p for p in REAL_DIR.iterdir() if p.is_dir()):
+        gt_file, pred_file = d / "gt" / "gt.txt", d / "pred.txt"
+        if gt_file.is_file() and pred_file.is_file():
+            gt = motrics.load_motchallenge(gt_file)
+            pred = motrics.load_motchallenge(pred_file)
+            seqs.append(Sequence(d.name, *motrics.align_frames(gt, pred)))
     return seqs
 
 
-def default_root() -> tuple[Path, str]:
-    """Pick the dataset to benchmark: real sequences if present, else synthetic.
-
-    Returns ``(root, kind)`` where ``kind`` is ``"real"`` or ``"synthetic"``.
-    """
-    if discover_sequences(REAL_DIR):
-        return REAL_DIR, "real"
-    return DATA_DIR, "synthetic"
-
-
-def ensure_fixtures() -> None:
-    """Generate the synthetic fixtures if absent (they are generated, not committed)."""
-    if not discover_sequences(DATA_DIR):
-        import generate_fixtures
-
-        generate_fixtures.main()
-
-
-def load_dataset(
-    root: Path | None = None, *, min_confidence: float | None = None
-) -> tuple[list[Sequence], str]:
-    """Load every sequence under ``root`` (or the auto-selected default)."""
-    if root is None:
-        root, kind = default_root()
-        if kind == "synthetic":
-            ensure_fixtures()
-    else:
-        kind = "real" if root.resolve() == REAL_DIR.resolve() else "synthetic"
-    sequences = [
-        load_sequence(seq_dir, min_confidence=min_confidence)
-        for seq_dir in discover_sequences(root)
-    ]
-    return sequences, kind
+def load_dataset() -> tuple[list[Sequence], str]:
+    """Return real sequences if any are present, else the synthetic ones."""
+    real = load_real()
+    return (real, "real") if real else (make_synthetic(), "synthetic")
