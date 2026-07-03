@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use crate::clear::Frame;
+use crate::clear::{Frame, SimFrame};
 use crate::iou::iou_matrix;
 
 /// Accumulated Identity metrics over a sequence.
@@ -42,13 +42,10 @@ pub struct IdentityMetrics {
 const FORBIDDEN: f64 = 1e18;
 
 /// Assign dense indices to arbitrary ids in order of first appearance.
-fn index_ids<'a>(
-    frames: &[Frame<'a>],
-    select: impl Fn(&Frame<'a>) -> &'a [i64],
-) -> HashMap<i64, usize> {
+fn index_ids<'a>(id_lists: impl Iterator<Item = &'a [i64]>) -> HashMap<i64, usize> {
     let mut index = HashMap::new();
-    for f in frames {
-        for &id in select(f) {
+    for ids in id_lists {
+        for &id in ids {
             let next = index.len();
             index.entry(id).or_insert(next);
         }
@@ -56,42 +53,53 @@ fn index_ids<'a>(
     index
 }
 
-/// Compute Identity metrics (IDF1/IDP/IDR) over a sequence of frames.
-pub fn compute_identity(frames: &[Frame], threshold: f64) -> IdentityMetrics {
-    let gt_index = index_ids(frames, |f| f.gt_ids);
-    let pred_index = index_ids(frames, |f| f.pred_ids);
-    let n_g = gt_index.len();
-    let n_t = pred_index.len();
-
-    let mut gt_count = vec![0usize; n_g];
-    let mut pred_count = vec![0usize; n_t];
-    // potential[i][j] = frames where gt i and pred j co-occur with IoU >= threshold.
-    let mut potential = vec![vec![0usize; n_t]; n_g];
-
-    for f in frames {
-        for &id in f.gt_ids {
-            gt_count[gt_index[&id]] += 1;
-        }
-        for &id in f.pred_ids {
-            pred_count[pred_index[&id]] += 1;
-        }
-        if f.gt_ids.is_empty() || f.pred_ids.is_empty() {
-            continue;
-        }
-        let iou = iou_matrix(f.gt_boxes, f.pred_boxes);
-        for (gi, &gid) in f.gt_ids.iter().enumerate() {
-            for (pj, &pid) in f.pred_ids.iter().enumerate() {
-                if iou[gi][pj] >= threshold {
-                    potential[gt_index[&gid]][pred_index[&pid]] += 1;
-                }
+/// Accumulate per-track detection counts and per-pair co-occurrence counts
+/// ("potential" IDTP) from `gt_ids`/`pred_ids` scored against `sim`. Shared by
+/// the boxes-based and precomputed-similarity entry points below.
+#[allow(clippy::too_many_arguments)]
+fn accumulate_frame(
+    gt_ids: &[i64],
+    pred_ids: &[i64],
+    sim: &[Vec<f64>],
+    threshold: f64,
+    gt_index: &HashMap<i64, usize>,
+    pred_index: &HashMap<i64, usize>,
+    gt_count: &mut [usize],
+    pred_count: &mut [usize],
+    potential: &mut [Vec<usize>],
+) {
+    for &id in gt_ids {
+        gt_count[gt_index[&id]] += 1;
+    }
+    for &id in pred_ids {
+        pred_count[pred_index[&id]] += 1;
+    }
+    if gt_ids.is_empty() || pred_ids.is_empty() {
+        return;
+    }
+    for (gi, &gid) in gt_ids.iter().enumerate() {
+        for (pj, &pid) in pred_ids.iter().enumerate() {
+            if sim[gi][pj] >= threshold {
+                potential[gt_index[&gid]][pred_index[&pid]] += 1;
             }
         }
     }
+}
 
+/// Solve the global bipartite assignment and derive IDF1/IDP/IDR from the
+/// per-track counts and co-occurrence potential. Shared by both entry points.
+fn finalize(
+    num_frames: usize,
+    n_g: usize,
+    n_t: usize,
+    gt_count: &[usize],
+    pred_count: &[usize],
+    potential: &[Vec<usize>],
+) -> IdentityMetrics {
     let total_gt: usize = gt_count.iter().sum();
     let total_pred: usize = pred_count.iter().sum();
     let mut m = IdentityMetrics {
-        num_frames: frames.len(),
+        num_frames,
         num_gt: total_gt,
         num_pred: total_pred,
         ..Default::default()
@@ -179,6 +187,69 @@ pub fn compute_identity(frames: &[Frame], threshold: f64) -> IdentityMetrics {
         0.0
     };
     m
+}
+
+/// Compute Identity metrics (IDF1/IDP/IDR) over a sequence of frames.
+pub fn compute_identity(frames: &[Frame], threshold: f64) -> IdentityMetrics {
+    let gt_index = index_ids(frames.iter().map(|f| f.gt_ids));
+    let pred_index = index_ids(frames.iter().map(|f| f.pred_ids));
+    let n_g = gt_index.len();
+    let n_t = pred_index.len();
+
+    let mut gt_count = vec![0usize; n_g];
+    let mut pred_count = vec![0usize; n_t];
+    // potential[i][j] = frames where gt i and pred j co-occur with IoU >= threshold.
+    let mut potential = vec![vec![0usize; n_t]; n_g];
+
+    for f in frames {
+        let sim = if f.gt_ids.is_empty() || f.pred_ids.is_empty() {
+            Vec::new()
+        } else {
+            iou_matrix(f.gt_boxes, f.pred_boxes)
+        };
+        accumulate_frame(
+            f.gt_ids,
+            f.pred_ids,
+            &sim,
+            threshold,
+            &gt_index,
+            &pred_index,
+            &mut gt_count,
+            &mut pred_count,
+            &mut potential,
+        );
+    }
+
+    finalize(frames.len(), n_g, n_t, &gt_count, &pred_count, &potential)
+}
+
+/// Compute Identity metrics from precomputed per-frame similarity matrices
+/// instead of boxes (e.g. for callers migrating from a distance-matrix API).
+pub fn compute_identity_from_similarity(frames: &[SimFrame], threshold: f64) -> IdentityMetrics {
+    let gt_index = index_ids(frames.iter().map(|f| f.gt_ids));
+    let pred_index = index_ids(frames.iter().map(|f| f.pred_ids));
+    let n_g = gt_index.len();
+    let n_t = pred_index.len();
+
+    let mut gt_count = vec![0usize; n_g];
+    let mut pred_count = vec![0usize; n_t];
+    let mut potential = vec![vec![0usize; n_t]; n_g];
+
+    for f in frames {
+        accumulate_frame(
+            f.gt_ids,
+            f.pred_ids,
+            f.similarity,
+            threshold,
+            &gt_index,
+            &pred_index,
+            &mut gt_count,
+            &mut pred_count,
+            &mut potential,
+        );
+    }
+
+    finalize(frames.len(), n_g, n_t, &gt_count, &pred_count, &potential)
 }
 
 #[cfg(test)]

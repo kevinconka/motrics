@@ -111,14 +111,22 @@ See [`benchmarks/README.md`](benchmarks/README.md) for how to run it.
       and caveats.
   - [ ] Zero-copy NumPy input path (folds into "broaden core inputs" below).
 - [ ] Replace TrackEval / py-motmetrics, not just benchmark against them:
+  - [x] Precomputed-similarity core inputs (`compute_clear_from_similarity`,
+        `compute_identity_from_similarity`) — the piece `compat.motmetrics`
+        needed, and the first slice of "broaden core inputs" below.
+  - [x] `motrics.compat.motmetrics` — a drop-in `MOTAccumulator` replacement.
+        Covers the `mota`/`motp`/`idf1`/`idp`/`idr`/`recall`/`precision`/
+        `num_*` subset of `motchallenge_metrics`; per-trajectory metrics
+        (mostly-tracked/fragmentations/transfer-ascend-migrate) aren't
+        implemented yet and raise clearly rather than guessing. `pip install
+        motrics[compat]` for the pandas-backed summary. See
+        [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/).
   - [ ] Migration guide + metric-name map.
-  - [ ] `motrics.compat.motmetrics` — a drop-in `MOTAccumulator` replacement
-        (small surface, no motmetrics installed).
   - [ ] `motrics.compat.trackeval` — a drop-in for the MOTChallenge evaluation
         path (`Evaluator`/dataset/metrics), no TrackEval installed. Gated on
         TrackEval-parity MOTChallenge preprocessing below.
-  - [ ] Broaden core inputs (precomputed similarity matrices, `xywh` boxes,
-        zero-copy NumPy) so users pass what they already hold.
+  - [ ] Broaden core inputs further (`xywh` boxes, zero-copy NumPy) so users
+        pass what they already hold.
   - [ ] MOTChallenge ingest with TrackEval-parity preprocessing (confidence,
         class/distractor/ignore-region handling) — the enabling piece for
         `compat.trackeval` and for numbers matching TrackEval's reported values.

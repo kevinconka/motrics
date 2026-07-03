@@ -115,6 +115,22 @@ def compute_clear(
     """
     ...
 
+def compute_clear_from_similarity(
+    gt_ids: Sequence[Sequence[int]],
+    pred_ids: Sequence[Sequence[int]],
+    similarity: Sequence[Sequence[Sequence[float]]],
+    threshold: float = 0.5,
+) -> ClearMetrics:
+    """Compute CLEAR MOT metrics from precomputed per-frame similarity matrices.
+
+    For callers that already hold pairwise scores (e.g. a ``motmetrics``-style
+    distance matrix converted to similarity) instead of boxes.
+    ``similarity[t][i][j]`` scores ``gt_ids[t][i]`` against ``pred_ids[t][j]``;
+    higher is better, the same convention as IoU, and pairs below
+    ``threshold`` are never matched.
+    """
+    ...
+
 class IdentityMetrics:
     """Accumulated Identity metrics (IDF1/IDP/IDR) over a sequence."""
 
@@ -168,6 +184,18 @@ def compute_identity(
     Inputs are frame-aligned exactly like :func:`compute_clear`. Identity metrics
     use a single global bipartite matching between whole ground-truth and
     predicted trajectories, rewarding id consistency over time.
+    """
+    ...
+
+def compute_identity_from_similarity(
+    gt_ids: Sequence[Sequence[int]],
+    pred_ids: Sequence[Sequence[int]],
+    similarity: Sequence[Sequence[Sequence[float]]],
+    threshold: float = 0.5,
+) -> IdentityMetrics:
+    """Compute Identity metrics from precomputed per-frame similarity matrices.
+
+    Same similarity convention as :func:`compute_clear_from_similarity`.
     """
     ...
 

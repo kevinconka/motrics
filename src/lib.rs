@@ -64,6 +64,50 @@ fn build_frames<'a>(
     Ok(frames)
 }
 
+/// Validate precomputed per-frame similarity matrices and borrow them as a
+/// slice of [`clear::SimFrame`]. Shared by the similarity-matrix entry points
+/// (`compute_clear_from_similarity`, `compute_identity_from_similarity`).
+fn build_sim_frames<'a>(
+    gt_ids: &'a [Vec<i64>],
+    pred_ids: &'a [Vec<i64>],
+    similarity: &'a [Vec<Vec<f64>>],
+) -> PyResult<Vec<clear::SimFrame<'a>>> {
+    if gt_ids.len() != pred_ids.len() || gt_ids.len() != similarity.len() {
+        return Err(PyValueError::new_err(format!(
+            "gt_ids, pred_ids, and similarity must have the same number of frames, got {}, {}, {}",
+            gt_ids.len(),
+            pred_ids.len(),
+            similarity.len()
+        )));
+    }
+
+    let mut frames = Vec::with_capacity(gt_ids.len());
+    for (i, ((g, p), s)) in gt_ids.iter().zip(pred_ids).zip(similarity).enumerate() {
+        if s.len() != g.len() {
+            return Err(PyValueError::new_err(format!(
+                "frame {i}: similarity has {} rows, expected {} (len(gt_ids[{i}]))",
+                s.len(),
+                g.len()
+            )));
+        }
+        for (r, row) in s.iter().enumerate() {
+            if row.len() != p.len() {
+                return Err(PyValueError::new_err(format!(
+                    "frame {i}: similarity row {r} has {} columns, expected {} (len(pred_ids[{i}]))",
+                    row.len(),
+                    p.len()
+                )));
+            }
+        }
+        frames.push(clear::SimFrame {
+            gt_ids: g,
+            pred_ids: p,
+            similarity: s,
+        });
+    }
+    Ok(frames)
+}
+
 /// Return the version of the compiled Rust core.
 ///
 /// Wired through Cargo at build time so the native and Python versions can
@@ -204,6 +248,21 @@ impl ClearMetrics {
     }
 }
 
+impl From<clear::ClearMetrics> for ClearMetrics {
+    fn from(m: clear::ClearMetrics) -> Self {
+        ClearMetrics {
+            mota: m.mota,
+            motp: m.motp,
+            num_frames: m.num_frames,
+            num_gt: m.num_gt,
+            num_matches: m.num_matches,
+            num_false_positives: m.num_false_positives,
+            num_misses: m.num_misses,
+            num_switches: m.num_switches,
+        }
+    }
+}
+
 /// Compute CLEAR MOT metrics (MOTA, MOTP, FP, FN, ID switches) for a sequence.
 ///
 /// Inputs are frame-aligned: `gt_ids[t]` / `gt_boxes[t]` describe ground-truth
@@ -220,17 +279,26 @@ fn compute_clear(
     iou_threshold: f64,
 ) -> PyResult<ClearMetrics> {
     let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
-    let m = clear::compute_clear(&frames, iou_threshold);
-    Ok(ClearMetrics {
-        mota: m.mota,
-        motp: m.motp,
-        num_frames: m.num_frames,
-        num_gt: m.num_gt,
-        num_matches: m.num_matches,
-        num_false_positives: m.num_false_positives,
-        num_misses: m.num_misses,
-        num_switches: m.num_switches,
-    })
+    Ok(clear::compute_clear(&frames, iou_threshold).into())
+}
+
+/// Compute CLEAR MOT metrics from precomputed per-frame similarity matrices
+/// instead of boxes.
+///
+/// For callers that already hold pairwise scores (e.g. a `motmetrics`-style
+/// distance matrix converted to similarity). `similarity[t][i][j]` scores
+/// `gt_ids[t][i]` against `pred_ids[t][j]`; higher is better, the same
+/// convention as IoU, and pairs below `threshold` are never matched.
+#[pyfunction]
+#[pyo3(signature = (gt_ids, pred_ids, similarity, threshold=0.5))]
+fn compute_clear_from_similarity(
+    gt_ids: Vec<Vec<i64>>,
+    pred_ids: Vec<Vec<i64>>,
+    similarity: Vec<Vec<Vec<f64>>>,
+    threshold: f64,
+) -> PyResult<ClearMetrics> {
+    let frames = build_sim_frames(&gt_ids, &pred_ids, &similarity)?;
+    Ok(clear::compute_clear_from_similarity(&frames, threshold).into())
 }
 
 /// Accumulated Identity metrics (IDF1/IDP/IDR) over a sequence.
@@ -275,6 +343,22 @@ impl IdentityMetrics {
     }
 }
 
+impl From<identity::IdentityMetrics> for IdentityMetrics {
+    fn from(m: identity::IdentityMetrics) -> Self {
+        IdentityMetrics {
+            idf1: m.idf1,
+            idp: m.idp,
+            idr: m.idr,
+            idtp: m.idtp,
+            idfp: m.idfp,
+            idfn: m.idfn,
+            num_frames: m.num_frames,
+            num_gt: m.num_gt,
+            num_pred: m.num_pred,
+        }
+    }
+}
+
 /// Compute Identity metrics (IDF1, IDP, IDR) for a sequence.
 ///
 /// Inputs are frame-aligned exactly like [`compute_clear`]. Identity metrics use
@@ -290,18 +374,22 @@ fn compute_identity(
     iou_threshold: f64,
 ) -> PyResult<IdentityMetrics> {
     let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
-    let m = identity::compute_identity(&frames, iou_threshold);
-    Ok(IdentityMetrics {
-        idf1: m.idf1,
-        idp: m.idp,
-        idr: m.idr,
-        idtp: m.idtp,
-        idfp: m.idfp,
-        idfn: m.idfn,
-        num_frames: m.num_frames,
-        num_gt: m.num_gt,
-        num_pred: m.num_pred,
-    })
+    Ok(identity::compute_identity(&frames, iou_threshold).into())
+}
+
+/// Compute Identity metrics from precomputed per-frame similarity matrices
+/// instead of boxes. Same similarity convention as
+/// [`compute_clear_from_similarity`].
+#[pyfunction]
+#[pyo3(signature = (gt_ids, pred_ids, similarity, threshold=0.5))]
+fn compute_identity_from_similarity(
+    gt_ids: Vec<Vec<i64>>,
+    pred_ids: Vec<Vec<i64>>,
+    similarity: Vec<Vec<Vec<f64>>>,
+    threshold: f64,
+) -> PyResult<IdentityMetrics> {
+    let frames = build_sim_frames(&gt_ids, &pred_ids, &similarity)?;
+    Ok(identity::compute_identity_from_similarity(&frames, threshold).into())
 }
 
 /// HOTA metrics over a sequence (summarised, with per-alpha curves retained).
@@ -391,7 +479,9 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(iou_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(match_boxes, m)?)?;
     m.add_function(wrap_pyfunction!(compute_clear, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_clear_from_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(compute_identity, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_identity_from_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(compute_hota, m)?)?;
     m.add_class::<Matching>()?;
     m.add_class::<ClearMetrics>()?;
