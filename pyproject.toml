@@ -1,5 +1,7 @@
 [build-system]
-requires = ["maturin>=1.9,<2.0"]
+# numpy is needed at build time too: the compiled extension links against
+# PyO3-numpy, whose build script queries the ambient Python's numpy install.
+requires = ["maturin>=1.9,<2.0", "numpy>=1.24"]
 build-backend = "maturin"
 
 [project]
@@ -26,13 +28,14 @@ classifiers = [
 ]
 # Version is sourced from Cargo.toml by maturin (see [tool.maturin] below).
 dynamic = ["version"]
+# The core accepts boxes as NumPy arrays for a zero-copy read path
+# (compute_clear/compute_identity/compute_hota/iou_matrix/match_boxes).
+dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
-# motrics.compat.motmetrics' MetricsHost.compute() returns a pandas DataFrame
-# (matching motmetrics); motrics.compat.trackeval's HOTA fields are numpy
-# arrays (matching TrackEval) — neither the core nor the other subpackage needs
-# either.
-compat = ["pandas>=2.0", "numpy>=1.24"]
+# motrics.compat.motmetrics' MetricsHost.compute() returns a pandas DataFrame,
+# matching motmetrics.
+compat = ["pandas>=2.0"]
 
 [project.urls]
 Homepage = "https://github.com/kevinconka/motrics"

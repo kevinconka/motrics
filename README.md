@@ -16,8 +16,10 @@ An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
   Identity, and HOTA, checked in CI.
 - 🔄 **Drop-in migration** — swap one import to replace py-motmetrics; evaluate
   a MOTChallenge benchmark without installing TrackEval.
-- 🐍 **Ergonomic, typed Python API** — PEP 561, zero required runtime
-  dependencies.
+- 🐍 **Ergonomic, typed Python API** — PEP 561, `numpy` the only required
+  runtime dependency.
+- 🔢 **Flexible box input** — `xyxy` or `xywh`, and a zero-copy read path for
+  contiguous NumPy arrays.
 
 ## Install
 
@@ -48,10 +50,14 @@ hota = motrics.compute_hota(gt_ids, gt_boxes, pred_ids, pred_boxes)
 print(clear.mota, identity.idf1, hota.hota)
 ```
 
-Boxes use the `xyxy` convention `(x1, y1, x2, y2)`. Want numbers matching
-TrackEval's own reported values (pedestrian-only, distractor-aware)? Use
-`load_motchallenge_gt` + `preprocess_motchallenge` instead of
-`load_motchallenge` + `align_frames`.
+Boxes default to the `xyxy` convention `(x1, y1, x2, y2)`; pass
+`box_format="xywh"` for `(x, y, width, height)` instead. Each frame's boxes
+can also be a `(N, 4)` float64 NumPy array — a contiguous `xyxy` array is read
+with zero copies, no per-box Python overhead.
+
+Want numbers matching TrackEval's own reported values (pedestrian-only,
+distractor-aware)? Use `load_motchallenge_gt` + `preprocess_motchallenge`
+instead of `load_motchallenge` + `align_frames`.
 
 ## Migrating from py-motmetrics
 
@@ -172,7 +178,7 @@ it yourself.
 - [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
 - [x] Benchmark & parity infrastructure vs **TrackEval** and **py-motmetrics**,
       on real MOTChallenge data, validated in CI.
-  - [ ] Zero-copy NumPy input path (folds into "broaden core inputs" below).
+  - [x] Zero-copy NumPy input path (see "broaden core inputs" below).
 - [ ] Replace TrackEval / py-motmetrics, not just benchmark against them:
   - [x] Precomputed-similarity core inputs (`compute_clear_from_similarity`,
         `compute_identity_from_similarity`) — the piece `compat.motmetrics`
@@ -189,8 +195,11 @@ it yourself.
         (same class names, config keys, and result shape); see above for
         what's out of scope (parallel eval, full `CLEAR` field set, other
         metrics).
-  - [ ] Broaden core inputs further (`xywh` boxes, zero-copy NumPy) so users
-        pass what they already hold.
+  - [x] Broaden core inputs further — `box_format="xywh"` alongside the
+        default `xyxy`, and a zero-copy read path for contiguous `(N, 4)`
+        float64 NumPy arrays, on `compute_clear`/`compute_identity`/
+        `compute_hota`/`iou_matrix`/`match_boxes`. `numpy` is now the one
+        required runtime dependency of the core.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
       benchmark (ingest + preprocessing + similarity), added incrementally:
   - [ ] Box-IoU adapters (DanceTrack, KITTI 2D-box, …) — reuse the existing IoU
