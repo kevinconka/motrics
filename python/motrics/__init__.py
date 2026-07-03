@@ -7,6 +7,7 @@ This package re-exports the public API so users only ever import from
 
 from motrics._motrics import (
     ClearMetrics,
+    EvaluationResult,
     HotaMetrics,
     IdentityMetrics,
     Matching,
@@ -14,6 +15,7 @@ from motrics._motrics import (
     compute_clear,
     compute_clear_from_similarity,
     compute_hota,
+    compute_hota_from_similarity,
     compute_identity,
     compute_identity_from_similarity,
     iou,
@@ -22,6 +24,7 @@ from motrics._motrics import (
     match_boxes,
     version,
 )
+from motrics.frames import Frames, evaluate
 from motrics.motchallenge import (
     align_frames,
     load_motchallenge,
@@ -31,6 +34,8 @@ from motrics.motchallenge import (
 
 __all__ = [
     "ClearMetrics",
+    "EvaluationResult",
+    "Frames",
     "HotaMetrics",
     "IdentityMetrics",
     "Matching",
@@ -39,8 +44,10 @@ __all__ = [
     "compute_clear",
     "compute_clear_from_similarity",
     "compute_hota",
+    "compute_hota_from_similarity",
     "compute_identity",
     "compute_identity_from_similarity",
+    "evaluate",
     "iou",
     "iou_matrix",
     "is_debug_build",

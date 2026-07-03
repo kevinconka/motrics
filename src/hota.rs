@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use crate::clear::Frame;
+use crate::clear::{Frame, SimFrame};
 use crate::iou::iou_matrix;
 
 /// HOTA metrics over a sequence, summarised (mean over alpha) with the per-alpha
@@ -70,16 +70,69 @@ struct FrameData {
     iou: Vec<Vec<f64>>,
 }
 
+/// A frame's ids plus a way to get its gt/pred similarity matrix — the only
+/// piece that differs between scoring from raw boxes and from a precomputed
+/// matrix. Lets [`compute_hota_generic`] serve both [`compute_hota`] and
+/// [`compute_hota_from_similarity`] without recomputing IoU twice.
+trait HotaFrame {
+    fn gt_ids(&self) -> &[i64];
+    fn pred_ids(&self) -> &[i64];
+    fn similarity(&self) -> Vec<Vec<f64>>;
+}
+
+impl HotaFrame for Frame<'_> {
+    fn gt_ids(&self) -> &[i64] {
+        self.gt_ids
+    }
+    fn pred_ids(&self) -> &[i64] {
+        self.pred_ids
+    }
+    fn similarity(&self) -> Vec<Vec<f64>> {
+        if self.gt_ids.is_empty() || self.pred_ids.is_empty() {
+            Vec::new()
+        } else {
+            iou_matrix(self.gt_boxes, self.pred_boxes)
+        }
+    }
+}
+
+impl HotaFrame for SimFrame<'_> {
+    fn gt_ids(&self) -> &[i64] {
+        self.gt_ids
+    }
+    fn pred_ids(&self) -> &[i64] {
+        self.pred_ids
+    }
+    fn similarity(&self) -> Vec<Vec<f64>> {
+        if self.gt_ids.is_empty() || self.pred_ids.is_empty() {
+            Vec::new()
+        } else {
+            self.similarity.to_vec()
+        }
+    }
+}
+
 /// Compute HOTA metrics over a sequence of frames.
 pub fn compute_hota(frames: &[Frame]) -> HotaMetrics {
+    compute_hota_generic(frames)
+}
+
+/// Compute HOTA metrics from precomputed per-frame similarity matrices instead
+/// of boxes. Same similarity convention as
+/// [`crate::clear::compute_clear_from_similarity`].
+pub fn compute_hota_from_similarity(frames: &[SimFrame]) -> HotaMetrics {
+    compute_hota_generic(frames)
+}
+
+fn compute_hota_generic<F: HotaFrame>(frames: &[F]) -> HotaMetrics {
     let mut gt_index: HashMap<i64, usize> = HashMap::new();
     let mut pred_index: HashMap<i64, usize> = HashMap::new();
     for f in frames {
-        for &id in f.gt_ids {
+        for &id in f.gt_ids() {
             let next = gt_index.len();
             gt_index.entry(id).or_insert(next);
         }
-        for &id in f.pred_ids {
+        for &id in f.pred_ids() {
             let next = pred_index.len();
             pred_index.entry(id).or_insert(next);
         }
@@ -109,19 +162,15 @@ pub fn compute_hota(frames: &[Frame]) -> HotaMetrics {
     let mut gt_count = vec![0.0f64; n_g];
     let mut pred_count = vec![0.0f64; n_t];
     for f in frames {
-        let gt_idx: Vec<usize> = f.gt_ids.iter().map(|id| gt_index[id]).collect();
-        let pred_idx: Vec<usize> = f.pred_ids.iter().map(|id| pred_index[id]).collect();
+        let gt_idx: Vec<usize> = f.gt_ids().iter().map(|id| gt_index[id]).collect();
+        let pred_idx: Vec<usize> = f.pred_ids().iter().map(|id| pred_index[id]).collect();
         for &g in &gt_idx {
             gt_count[g] += 1.0;
         }
         for &p in &pred_idx {
             pred_count[p] += 1.0;
         }
-        let iou = if gt_idx.is_empty() || pred_idx.is_empty() {
-            Vec::new()
-        } else {
-            iou_matrix(f.gt_boxes, f.pred_boxes)
-        };
+        let iou = f.similarity();
         fds.push(FrameData {
             gt_idx,
             pred_idx,
@@ -346,6 +395,36 @@ mod tests {
         assert!(m.hota_fn_alphas.iter().all(|&v| v == 1.0));
         assert!(m.loca_alphas.iter().all(|&v| v == 1.0));
         assert_eq!(m.loca, 1.0);
+    }
+
+    #[test]
+    fn from_similarity_matches_from_boxes() {
+        let box_frames = [
+            frame(&[1], &[A], &[10], &[A]),
+            frame(&[1, 2], &[A, A], &[10], &[A]),
+        ];
+        let from_boxes = compute_hota(&box_frames);
+
+        let sims: Vec<Vec<Vec<f64>>> = box_frames
+            .iter()
+            .map(|f| iou_matrix(f.gt_boxes, f.pred_boxes))
+            .collect();
+        let sim_frames: Vec<SimFrame> = box_frames
+            .iter()
+            .zip(&sims)
+            .map(|(f, s)| SimFrame {
+                gt_ids: f.gt_ids,
+                pred_ids: f.pred_ids,
+                similarity: s,
+            })
+            .collect();
+        let from_similarity = compute_hota_from_similarity(&sim_frames);
+
+        assert!((from_boxes.hota - from_similarity.hota).abs() < 1e-9);
+        assert!((from_boxes.deta - from_similarity.deta).abs() < 1e-9);
+        assert!((from_boxes.assa - from_similarity.assa).abs() < 1e-9);
+        assert_eq!(from_boxes.num_gt, from_similarity.num_gt);
+        assert_eq!(from_boxes.num_pred, from_similarity.num_pred);
     }
 
     #[test]

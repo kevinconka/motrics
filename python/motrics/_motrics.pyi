@@ -302,3 +302,49 @@ def compute_hota(
     takes no single ``iou_threshold``.
     """
     ...
+
+def compute_hota_from_similarity(
+    gt_ids: Sequence[Sequence[int]],
+    pred_ids: Sequence[Sequence[int]],
+    similarity: Sequence[Sequence[Sequence[float]]],
+) -> HotaMetrics:
+    """Compute HOTA metrics from precomputed per-frame similarity matrices.
+
+    Same similarity convention as :func:`compute_clear_from_similarity`.
+    """
+    ...
+
+class EvaluationResult:
+    """The result of :func:`evaluate`: CLEAR, Identity, and HOTA computed
+    together from one shared similarity matrix."""
+
+    @property
+    def clear(self) -> ClearMetrics:
+        """CLEAR MOT metrics (MOTA, MOTP, FP, FN, ID switches)."""
+
+    @property
+    def identity(self) -> IdentityMetrics:
+        """Identity metrics (IDF1, IDP, IDR)."""
+
+    @property
+    def hota(self) -> HotaMetrics:
+        """HOTA metrics (DetA, AssA, LocA, plus per-alpha curves)."""
+
+    def __repr__(self) -> str: ...
+
+def evaluate(
+    gt_ids: Sequence[Sequence[int]],
+    gt_boxes: Sequence[Boxes],
+    pred_ids: Sequence[Sequence[int]],
+    pred_boxes: Sequence[Boxes],
+    iou_threshold: float = 0.5,
+    box_format: BoxFormat = "xyxy",
+) -> EvaluationResult:
+    """Compute CLEAR, Identity, and HOTA together for a sequence.
+
+    Inputs are frame-aligned exactly like :func:`compute_clear`. Builds the
+    gt/pred similarity matrix once and reuses it for all three metrics,
+    instead of recomputing it once per metric (what calling ``compute_clear``,
+    ``compute_identity``, and ``compute_hota`` separately would do).
+    """
+    ...

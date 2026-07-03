@@ -40,15 +40,20 @@ import motrics
 gt = motrics.load_motchallenge("seq/gt/gt.txt")
 pred = motrics.load_motchallenge("seq/res.txt", min_confidence=0.5)
 
-# Align onto a shared frame timeline, then compute metrics.
+# Align onto a shared frame timeline, bundle each side, then evaluate.
 gt_ids, gt_boxes, pred_ids, pred_boxes = motrics.align_frames(gt, pred)
+result = motrics.evaluate(
+    motrics.Frames(ids=gt_ids, boxes=gt_boxes),
+    motrics.Frames(ids=pred_ids, boxes=pred_boxes),
+)
 
-clear = motrics.compute_clear(gt_ids, gt_boxes, pred_ids, pred_boxes)
-identity = motrics.compute_identity(gt_ids, gt_boxes, pred_ids, pred_boxes)
-hota = motrics.compute_hota(gt_ids, gt_boxes, pred_ids, pred_boxes)
-
-print(clear.mota, identity.idf1, hota.hota)
+print(result.clear.mota, result.identity.idf1, result.hota.hota)
 ```
+
+`evaluate()` builds the gt/pred similarity matrix once and shares it across
+CLEAR, Identity, and HOTA, instead of recomputing it per metric. Only need one
+metric? `compute_clear`/`compute_identity`/`compute_hota` take the same
+`gt_ids, gt_boxes, pred_ids, pred_boxes` directly, without a `Frames` wrapper.
 
 Boxes default to the `xyxy` convention `(x1, y1, x2, y2)`; pass
 `box_format="xywh"` for `(x, y, width, height)` instead. Each frame's boxes
@@ -200,6 +205,22 @@ it yourself.
         float64 NumPy arrays, on `compute_clear`/`compute_identity`/
         `compute_hota`/`iou_matrix`/`match_boxes`. `numpy` is now the one
         required runtime dependency of the core.
+- [x] Ergonomic native API — `Frames` bundles one side's ids/boxes (ground
+      truth or predictions) so the common case isn't four parallel lists
+      retyped per metric; `evaluate()` takes two `Frames` and returns CLEAR +
+      Identity + HOTA together, computing the gt/pred similarity matrix once
+      and sharing it across all three (`compute_clear`/`compute_identity`/
+      `compute_hota` called separately each build their own). The flat
+      `compute_clear`/`compute_identity`/`compute_hota` functions are
+      unchanged, for single-metric use.
+  - [ ] Streaming accumulator — `update()` per frame, `compute()` at the end,
+        the shape both py-motmetrics and torchmetrics use, for online
+        evaluation or sequences too large to hold fully in memory. Deferred:
+        HOTA's alpha sweep is naturally a whole-sequence batch computation,
+        so incrementalizing it correctly is real design work, not a thin
+        wrapper around the existing core — worth doing once the
+        dataset-adapter layer below has settled `Frames` as the shape
+        adapters produce, not before.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
       benchmark (ingest + preprocessing + similarity), added incrementally:
   - [ ] Box-IoU adapters (DanceTrack, KITTI 2D-box, …) — reuse the existing IoU
