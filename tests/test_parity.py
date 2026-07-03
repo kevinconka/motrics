@@ -14,7 +14,7 @@ import pytest
 from benchmarks.fixtures import Sequence, make_synthetic
 
 np = pytest.importorskip("numpy")
-te = pytest.importorskip("trackeval.metrics")
+trackeval = pytest.importorskip("trackeval.metrics")
 
 
 def _box(x: float, y: float, w: float = 10.0, h: float = 10.0) -> tuple:
@@ -73,7 +73,7 @@ def _args(seq: Sequence) -> tuple:
 
 @pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: s.name)
 def test_clear_parity(seq: Sequence) -> None:
-    ref = te.CLEAR({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
+    ref = trackeval.CLEAR({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
         _trackeval_data(seq)
     )
     m = motrics.compute_clear(*_args(seq))
@@ -87,7 +87,7 @@ def test_clear_parity(seq: Sequence) -> None:
 
 @pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: s.name)
 def test_identity_parity(seq: Sequence) -> None:
-    ref = te.Identity({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
+    ref = trackeval.Identity({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
         _trackeval_data(seq)
     )
     m = motrics.compute_identity(*_args(seq))
@@ -101,7 +101,7 @@ def test_identity_parity(seq: Sequence) -> None:
 
 @pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: s.name)
 def test_hota_parity(seq: Sequence) -> None:
-    ref = te.HOTA({"PRINT_CONFIG": False}).eval_sequence(_trackeval_data(seq))
+    ref = trackeval.HOTA({"PRINT_CONFIG": False}).eval_sequence(_trackeval_data(seq))
     m = motrics.compute_hota(*_args(seq))
     assert np.allclose(m.hota_alphas, ref["HOTA"], atol=1e-9)
     assert np.allclose(m.deta_alphas, ref["DetA"], atol=1e-9)
