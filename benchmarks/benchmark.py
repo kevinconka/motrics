@@ -83,9 +83,12 @@ def _contiguous(frames: list[list[int]]) -> list:
     return [np.array([mapping[i] for i in f], dtype=int) for f in frames]
 
 
-def _trackeval_all(seq: Sequence) -> dict[str, float]:
+def _trackeval_data(seq: Sequence) -> dict[str, Any]:
+    """Build TrackEval's raw-data dict once per sequence (id remapping +
+    similarity matrix) — shared prep, not attributed to any one metric, exactly
+    like TrackEval's own `Evaluator` builds it once then loops over metrics."""
     boxes = zip(seq.gt_boxes, seq.pred_boxes, strict=True)
-    data = {
+    return {
         "num_timesteps": seq.num_frames,
         "num_gt_ids": len({i for f in seq.gt_ids for i in f}),
         "num_tracker_ids": len({i for f in seq.pred_ids for i in f}),
@@ -95,29 +98,48 @@ def _trackeval_all(seq: Sequence) -> dict[str, float]:
         "tracker_ids": _contiguous(seq.pred_ids),
         "similarity_scores": [_np_iou(g, p) for g, p in boxes],
     }
+
+
+def _trackeval_clear(data: dict[str, Any]) -> dict[str, float]:
     cfg = {"THRESHOLD": IOU_THRESHOLD, "PRINT_CONFIG": False}
-    clear = CLEAR(cfg).eval_sequence(data)
-    ident = Identity(cfg).eval_sequence(data)
-    hota = HOTA({"PRINT_CONFIG": False}).eval_sequence(data)
+    r = CLEAR(cfg).eval_sequence(data)
+    return {"MOTA": float(r["MOTA"]), "MOTP": float(r["MOTP"])}
+
+
+def _trackeval_identity(data: dict[str, Any]) -> dict[str, float]:
+    cfg = {"THRESHOLD": IOU_THRESHOLD, "PRINT_CONFIG": False}
+    return {"IDF1": float(Identity(cfg).eval_sequence(data)["IDF1"])}
+
+
+def _trackeval_hota(data: dict[str, Any]) -> dict[str, float]:
+    r = HOTA({"PRINT_CONFIG": False}).eval_sequence(data)
     return {
-        "MOTA": float(clear["MOTA"]),
-        "MOTP": float(clear["MOTP"]),
-        "IDF1": float(ident["IDF1"]),
-        "HOTA": float(np.mean(hota["HOTA"])),
-        "DetA": float(np.mean(hota["DetA"])),
-        "AssA": float(np.mean(hota["AssA"])),
+        "HOTA": float(np.mean(r["HOTA"])),
+        "DetA": float(np.mean(r["DetA"])),
+        "AssA": float(np.mean(r["AssA"])),
     }
 
 
-def _motmetrics_all(seq: Sequence) -> dict[str, float]:
+def _motmetrics_acc(seq: Sequence) -> Any:
+    """Build the accumulator once per sequence — shared prep (each `update()`
+    call already does its own assignment), not attributed to any one metric."""
     acc = mm.MOTAccumulator(auto_id=True)
     frames = zip(seq.gt_boxes, seq.pred_boxes, seq.gt_ids, seq.pred_ids, strict=True)
     for g, p, gi, pi in frames:
         iou = _np_iou(g, p)
         # motmetrics wants 1 - IoU, with sub-threshold pairs masked out.
         acc.update(gi, pi, np.where(iou >= IOU_THRESHOLD, 1.0 - iou, np.nan))
-    row = mm.metrics.create().compute(acc, metrics=["mota", "idf1"], name="seq").iloc[0]
-    return {"MOTA": float(row["mota"]), "IDF1": float(row["idf1"])}
+    return acc
+
+
+def _motmetrics_mota(acc: Any) -> dict[str, float]:
+    row = mm.metrics.create().compute(acc, metrics=["mota"], name="seq").iloc[0]
+    return {"MOTA": float(row["mota"])}
+
+
+def _motmetrics_idf1(acc: Any) -> dict[str, float]:
+    row = mm.metrics.create().compute(acc, metrics=["idf1"], name="seq").iloc[0]
+    return {"IDF1": float(row["idf1"])}
 
 
 def _check_parity(results: dict[str, dict[str, float]]) -> list[str]:
@@ -135,19 +157,77 @@ def _check_parity(results: dict[str, dict[str, float]]) -> list[str]:
     return notes
 
 
+def _fmt_ms(seconds: float | None) -> str:
+    return f"{seconds * 1000:.0f} ms" if seconds is not None else "—"
+
+
+def _fmt_speedup(other: float | None, motrics_time: float) -> str:
+    return f"{other / motrics_time:.1f}x" if other is not None else "—"
+
+
+def _speedup_rows(times: dict[str, dict[str, float]]) -> list[tuple[str, ...]]:
+    """Per-metric total time (across every sequence and repeat) for each
+    engine, excluding shared prep that isn't attributed to any one metric
+    (TrackEval's similarity matrix, motmetrics' accumulator build) — the same
+    "pre-aligned arrays" methodology already documented in this directory's
+    README, just broken out per metric instead of bundled."""
+    rows = []
+    for metric in ("CLEAR", "Identity", "HOTA"):
+        m = times["motrics"][metric]
+        te = times["trackeval"].get(metric)
+        mmr = times["motmetrics"].get(metric)
+        rows.append(
+            (
+                metric,
+                _fmt_ms(m),
+                _fmt_ms(te),
+                _fmt_ms(mmr),
+                _fmt_speedup(te, m),
+                _fmt_speedup(mmr, m),
+            )
+        )
+    return rows
+
+
+def _print_speedup_table(times: dict[str, dict[str, float]]) -> None:
+    header = ("Metric", "motrics", "TrackEval", "py-motmetrics", "vs TE", "vs mm")
+    rows = [header, *_speedup_rows(times)]
+    widths = [max(len(r[i]) for r in rows) for i in range(len(header))]
+    for row in rows:
+        cells = [
+            row[0].ljust(widths[0]),
+            *(c.rjust(w) for c, w in zip(row[1:], widths[1:], strict=True)),
+        ]
+        print("  ".join(cells))
+
+
+def _markdown_speedup_table(times: dict[str, dict[str, float]]) -> list[str]:
+    columns = [
+        "Metric",
+        "motrics",
+        "TrackEval",
+        "py-motmetrics",
+        "vs TrackEval",
+        "vs py-motmetrics",
+    ]
+    lines = [
+        f"| {' | '.join(columns)} |",
+        f"| {' | '.join(['---'] + [':---:'] * (len(columns) - 1))} |",
+    ]
+    lines += [f"| {' | '.join(row)} |" for row in _speedup_rows(times)]
+    return lines
+
+
 def _write_markdown(
-    path: Path, rows: list[dict[str, Any]], speedups: dict[str, float]
+    path: Path, rows: list[dict[str, Any]], times: dict[str, dict[str, float]]
 ) -> None:
     """Render the same numbers `run()` prints as a markdown report (for the CI
     sticky-comment step); purely a formatting concern, no new computation."""
-    lines = ["### motrics benchmark — real MOT17-train data", ""]
+    lines = ["### motrics benchmark — MOT17 data", ""]
     if motrics.is_debug_build():
         lines += ["> ⚠️ debug build — timings are not meaningful (~10x slower).", ""]
     lines += [
-        "| Engine | Speedup vs motrics |",
-        "| --- | --- |",
-        f"| TrackEval | **{speedups['trackeval']:.1f}x** (CLEAR + Identity + HOTA) |",
-        f"| py-motmetrics | **{speedups['motmetrics']:.1f}x** (CLEAR + Identity) |",
+        *_markdown_speedup_table(times),
         "",
         "<details>",
         "<summary>Per-sequence results</summary>",
@@ -173,17 +253,34 @@ def run(sequences: list[Sequence], repeats: int, markdown: Path | None = None) -
         )
     print(f"\n{len(sequences)} sequence(s), {repeats} repeat(s)\n")
 
-    motrics_all = motrics_ci = trackeval = motmetrics = 0.0
+    times: dict[str, dict[str, float]] = {
+        "motrics": {"CLEAR": 0.0, "Identity": 0.0, "HOTA": 0.0},
+        "trackeval": {"CLEAR": 0.0, "Identity": 0.0, "HOTA": 0.0},
+        "motmetrics": {"CLEAR": 0.0, "Identity": 0.0},
+    }
     ok = True
     rows: list[dict[str, Any]] = []
     for seq in sequences:
-        c, t_c = _time(lambda s=seq: _motrics_clear(s), repeats)
-        i, t_i = _time(lambda s=seq: _motrics_identity(s), repeats)
-        h, t_h = _time(lambda s=seq: _motrics_hota(s), repeats)
-        te, t_te = _time(lambda s=seq: _trackeval_all(s), repeats)
-        mmr, t_mm = _time(lambda s=seq: _motmetrics_all(s), repeats)
+        c, t_mc = _time(lambda s=seq: _motrics_clear(s), repeats)
+        i, t_mi = _time(lambda s=seq: _motrics_identity(s), repeats)
+        h, t_mh = _time(lambda s=seq: _motrics_hota(s), repeats)
+
+        # Shared prep, built once and excluded from the per-metric timings
+        # below — same "pre-aligned arrays" convention as the old bundled
+        # numbers (see benchmarks/README.md), just no longer hidden inside a
+        # single combined call.
+        te_data = _trackeval_data(seq)
+        tc, t_tc = _time(lambda d=te_data: _trackeval_clear(d), repeats)
+        ti, t_ti = _time(lambda d=te_data: _trackeval_identity(d), repeats)
+        th, t_th = _time(lambda d=te_data: _trackeval_hota(d), repeats)
+
+        acc = _motmetrics_acc(seq)
+        mmc, t_mmc = _time(lambda a=acc: _motmetrics_mota(a), repeats)
+        mmi, t_mmi = _time(lambda a=acc: _motmetrics_idf1(a), repeats)
 
         m = {**c, **i, **h}
+        te = {**tc, **ti, **th}
+        mmr = {**mmc, **mmi}
         notes = _check_parity({"motrics": m, "trackeval": te, "motmetrics": mmr})
         seq_ok = not notes
         ok = ok and seq_ok
@@ -208,23 +305,22 @@ def run(sequences: list[Sequence], repeats: int, markdown: Path | None = None) -
             }
         )
 
-        motrics_all += t_c + t_i + t_h
-        motrics_ci += t_c + t_i
-        trackeval += t_te
-        motmetrics += t_mm
+        times["motrics"]["CLEAR"] += t_mc
+        times["motrics"]["Identity"] += t_mi
+        times["motrics"]["HOTA"] += t_mh
+        times["trackeval"]["CLEAR"] += t_tc
+        times["trackeval"]["Identity"] += t_ti
+        times["trackeval"]["HOTA"] += t_th
+        times["motmetrics"]["CLEAR"] += t_mmc
+        times["motmetrics"]["Identity"] += t_mmi
 
-    speedups = {
-        "trackeval": trackeval / motrics_all,
-        "motmetrics": motmetrics / motrics_ci,
-    }
     print("\n" + "=" * 60)
-    print(f"Speedup vs motrics over {len(sequences)} sequence(s) (higher = faster):")
-    print(f"  TrackEval      {speedups['trackeval']:.1f}x  (CLEAR + Identity + HOTA)")
-    print(f"  py-motmetrics  {speedups['motmetrics']:.1f}x  (CLEAR + Identity)")
+    print(f"Per-metric timing over {len(sequences)} sequence(s) (higher = faster):")
+    _print_speedup_table(times)
     print("=" * 60)
 
     if markdown is not None:
-        _write_markdown(markdown, rows, speedups)
+        _write_markdown(markdown, rows, times)
 
     if not ok:
         print("\nPARITY FAILURES DETECTED — see above.")
