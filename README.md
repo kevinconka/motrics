@@ -14,8 +14,8 @@ An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
   py-motmetrics on real MOT17 data.
 - 🎯 **Numerically validated** — exact parity with TrackEval on CLEAR,
   Identity, and HOTA, checked in CI.
-- 🔄 **Drop-in migration** — swap one import to replace py-motmetrics, no
-  other code changes.
+- 🔄 **Drop-in migration** — swap one import to replace py-motmetrics; evaluate
+  a MOTChallenge benchmark without installing TrackEval.
 - 🐍 **Ergonomic, typed Python API** — PEP 561, zero required runtime
   dependencies.
 
@@ -83,6 +83,29 @@ summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="a
 - See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
   for what else differs (e.g. no `events`/`mot_events` DataFrame).
 
+## Migrating from TrackEval
+
+Evaluate a MOTChallenge benchmark without installing TrackEval:
+
+```python
+import motrics.compat.trackeval as trackeval
+
+results = trackeval.evaluate_mot_challenge({
+    "MOT17-02-FRCNN": ("data/MOT17-02/gt/gt.txt", "results/MOT17-02.txt"),
+    "MOT17-04-FRCNN": ("data/MOT17-04/gt/gt.txt", "results/MOT17-04.txt"),
+})
+print(results["COMBINED_SEQ"]["clear"]["mota"])
+print(results["MOT17-02-FRCNN"]["hota"]["hota"])
+```
+
+- A small, functional subset of TrackEval's `Evaluator`: one function,
+  MOTChallenge only — no config dict, dataset-class plugin system, or
+  file/plot output.
+- Per-sequence CLEAR/Identity/HOTA match TrackEval's own numbers
+  (preprocessing included). `COMBINED_SEQ` CLEAR/Identity are exact
+  re-aggregations from summed counts; `COMBINED_SEQ` HOTA is a
+  detection-weighted average, not TrackEval's exact per-alpha combination.
+
 <details>
 <summary>Metric name map — TrackEval / py-motmetrics / motrics' native API</summary>
 
@@ -139,8 +162,9 @@ it yourself.
         removal, pedestrian-only, "do not consider" rows dropped) — validated
         against TrackEval's own `get_preprocessed_seq_data`, and now what the
         real-data benchmark uses. The enabling piece for `compat.trackeval`.
-  - [ ] `motrics.compat.trackeval` — a drop-in for the MOTChallenge evaluation
-        path (`Evaluator`/dataset/metrics), no TrackEval installed.
+  - [x] `motrics.compat.trackeval` — evaluate a MOTChallenge benchmark
+        (`evaluate_mot_challenge`) without installing TrackEval; a functional
+        subset of `Evaluator`, not a class-for-class clone (see above).
   - [ ] Broaden core inputs further (`xywh` boxes, zero-copy NumPy) so users
         pass what they already hold.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
