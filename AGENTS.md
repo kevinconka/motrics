@@ -85,25 +85,14 @@ uv run pytest
   Annotate every Python function signature.
 - **Commits:** Conventional Commits (`feat:`, `fix:`, `chore:`, `ci:`, ...).
 - **Branches:** conventional prefixes (`feat/...`, `fix/...`, `chore/...`).
+- **Be concise.** PR descriptions, commit messages, and code comments state
+  the fact, not the journey — no debugging narration, no restating the diff.
 - Keep the roadmap in `README.md` up to date as metrics land.
 
-## Roadmap (implementation order)
+## Roadmap
 
-1. Bounding-box IoU + assignment (Hungarian / greedy) primitives
-2. CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
-3. Identity metrics (IDF1 / IDP / IDR)
-4. HOTA (DetA, AssA, alpha sweep)
-5. MOTChallenge / TrackEval ingest + parity tests
-6. Real-data benchmark & parity — unify the parity and benchmark inputs onto
-   shared MOTChallenge-format fixtures, add a reproducible `benchmarks/` suite,
-   and validate parity + measure speedups (vs TrackEval, py-motmetrics) on real
-   MOTChallenge sequences. Needs network access to fetch the dataset (blocked in
-   the sandbox we developed in; available in CI or a permissioned session).
-   Note: parity so far uses synthetic in-memory sequences, and the initial
-   benchmark used a separate synthetic generator — this step makes both use one
-   real (or shared) dataset. Ballpark synthetic result: motrics ~6-8x faster
-   than TrackEval end-to-end (~26x vs py-motmetrics); a numpy zero-copy
-   fast-path is the likely next perf lever.
+See [README.md](README.md#roadmap) — the single source of truth for what's
+done and what's next, so it doesn't drift out of sync with a second copy here.
 
 When adding a metric, validate numbers against a reference implementation
 (e.g. TrackEval) in `tests/`.
