@@ -223,8 +223,14 @@ it yourself.
         adapters produce, not before.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
       benchmark (ingest + preprocessing + similarity), added incrementally:
-  - [ ] Box-IoU adapters (DanceTrack, KITTI 2D-box, …) — reuse the existing IoU
-        kernel; each is a bounded, low-risk addition with its own parity test.
+  - [x] DanceTrack — no adapter code needed. Its `gt.txt`/results format is
+        byte-for-byte MOTChallenge's (fixed class=1/consider=1 columns), and
+        TrackEval evaluates it via plain `MotChallenge2DBox` with no
+        DanceTrack-specific preprocessing branch. `load_motchallenge_gt` +
+        `preprocess_motchallenge` already handle it — confirmed by a
+        round-trip test against TrackEval's real preprocessing and metrics.
+  - [ ] KITTI 2D-box — genuinely different format (space-separated, `DontCare`
+        class, 3D fields even for the 2D-box challenge); needs a real parser.
   - [ ] Mask-IoU similarity kernel (KITTI-MOTS, BDD-MOTS, DAVIS) — new Rust core
         work, not just an adapter; tackle when a mask benchmark is needed.
   - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
