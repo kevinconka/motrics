@@ -1,8 +1,8 @@
-"""Sequences shared by the benchmark and the parity tests.
+"""Sequences for the parity tests and the benchmark.
 
-`make_synthetic()` builds deterministic in-memory sequences (no files, no
-network); `load_real()` reads real MOTChallenge sequences fetched by
-`download.py`. `load_dataset()` prefers real data when present.
+`make_synthetic()` builds deterministic in-memory sequences (used by the parity
+tests); `load_real()` reads real MOTChallenge sequences fetched by `download.py`
+(used by the benchmark).
 """
 
 from __future__ import annotations
@@ -93,9 +93,3 @@ def load_real() -> list[Sequence]:
             pred = motrics.load_motchallenge(pred_file)
             seqs.append(Sequence(d.name, *motrics.align_frames(gt, pred)))
     return seqs
-
-
-def load_dataset() -> tuple[list[Sequence], str]:
-    """Return real sequences if any are present, else the synthetic ones."""
-    real = load_real()
-    return (real, "real") if real else (make_synthetic(), "synthetic")

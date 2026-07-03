@@ -1,7 +1,7 @@
-name: Benchmark (real data)
+name: Benchmark
 
-# Opt-in: downloads real MOTChallenge sequences and benchmarks on them. Off the
-# PR/push path — runs on manual dispatch or weekly.
+# Downloads real MOTChallenge sequences and benchmarks motrics vs TrackEval /
+# py-motmetrics. Off the PR path (needs a ~150 MB download); manual or weekly.
 on:
   workflow_dispatch:
     inputs:
@@ -11,16 +11,13 @@ on:
         type: string
   schedule:
     - cron: "23 5 * * 1"
-  # TEMPORARY: verify the download host is reachable from CI. Remove once green.
-  push:
-    branches: [claude/checklist-completion-si092y]
 
 permissions:
   contents: read
 
 jobs:
-  benchmark-real:
-    name: Real data
+  benchmark:
+    name: Benchmark
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

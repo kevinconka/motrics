@@ -82,17 +82,19 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 
 ```bash
 uv sync --group parity && uv run maturin develop --release --uv
+uv run python benchmarks/download.py     # fetch real MOT17-train sequences
 uv run python benchmarks/benchmark.py
 ```
 
-Roughly how much faster motrics is (release build; illustrative, machine-dependent):
+Roughly how much faster motrics is on real MOT17 (release build; illustrative,
+machine-dependent):
 
 | motrics vs…   | CLEAR + Identity | With HOTA |
 | ------------- | ---------------- | --------- |
-| TrackEval     | ~6×              | ~13×      |
-| py-motmetrics | ~27×             | —         |
+| TrackEval     | ~3–4×            | ~6×       |
+| py-motmetrics | ~14×             | —         |
 
-See [`benchmarks/README.md`](benchmarks/README.md) for details and real-data runs.
+See [`benchmarks/README.md`](benchmarks/README.md) for how to run it.
 
 ## Roadmap
 

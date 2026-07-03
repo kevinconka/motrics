@@ -3,10 +3,11 @@
 
 For each sequence, CLEAR / Identity / HOTA are run through every available
 engine, checked for agreement (a parity gate) and timed end-to-end. TrackEval
-and py-motmetrics are optional (``uv sync --group parity``). Uses real data from
-``benchmarks/data/real`` when present (see download.py), else synthetic
-sequences. Build in release mode — a debug build is ~10x slower.
+and py-motmetrics are optional (``uv sync --group parity``). Runs on the real
+MOTChallenge sequences fetched by download.py. Build in release mode — a debug
+build is ~10x slower.
 
+    uv run python benchmarks/download.py     # once
     uv run python benchmarks/benchmark.py [--repeats N] [--smoke]
 """
 
@@ -18,7 +19,7 @@ from collections.abc import Callable
 from typing import Any
 
 import motrics
-from fixtures import Sequence, load_dataset
+from fixtures import Sequence, load_real
 
 # --- optional reference engines -------------------------------------------------
 
@@ -241,7 +242,7 @@ def _fmt_ms(seconds: float) -> str:
     return f"{seconds * 1e3:8.2f}"
 
 
-def run(sequences: list[Sequence], kind: str, repeats: int) -> int:
+def run(sequences: list[Sequence], repeats: int) -> int:
     if motrics.is_debug_build():
         print(
             "WARNING: debug build — timings are not meaningful (~10x slow). "
@@ -258,7 +259,7 @@ def run(sequences: list[Sequence], kind: str, repeats: int) -> int:
     else:
         print("note: py-motmetrics not installed — skipping (uv sync --group parity)")
 
-    print(f"\nDataset: {kind} — {len(sequences)} sequence(s), {repeats} repeat(s)\n")
+    print(f"\n{len(sequences)} sequence(s), {repeats} repeat(s)\n")
 
     # Accumulate totals for a closing summary.
     totals: dict[str, float] = dict.fromkeys(engines, 0.0)
@@ -372,8 +373,12 @@ def main() -> int:
         print("error: numpy is required (uv sync --group parity)")
         return 1
 
-    sequences, kind = load_dataset()
-    return run(sequences, kind, 1 if args.smoke else args.repeats)
+    sequences = load_real()
+    if not sequences:
+        print("error: no sequences found. Fetch them first:")
+        print("  uv run python benchmarks/download.py")
+        return 1
+    return run(sequences, 1 if args.smoke else args.repeats)
 
 
 if __name__ == "__main__":

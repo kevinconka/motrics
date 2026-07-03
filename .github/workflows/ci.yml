@@ -45,25 +45,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --group dev --group parity # parity deps activate the parity tests
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run maturin develop --uv
       - run: uv run ty check
       - run: uv run pytest
-
-  parity:
-    name: Parity & benchmark
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: "3.12"
-          enable-cache: true
-      - run: uv sync --group dev --group parity
-      - run: uv run maturin develop --release --uv # release: debug is ~10x slower
-      - run: uv run pytest # parity tests activate once TrackEval is installed
-      - run: uv run python benchmarks/benchmark.py --repeats 3
