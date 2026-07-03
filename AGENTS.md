@@ -87,6 +87,10 @@ uv run pytest
 - **Branches:** conventional prefixes (`feat/...`, `fix/...`, `chore/...`).
 - **Be concise.** PR descriptions, commit messages, and code comments state
   the fact, not the journey — no debugging narration, no restating the diff.
+- **Make PRs worth reading.** Prefer a table, before/after comparisons, code
+  snippets, or mermaid diagram over a paragraph when it makes the change
+  easier to scan — mermaid for high-level flow/process, code snippets for API
+  changes, tables for comparisons and test results.
 - Keep the roadmap in `README.md` up to date as metrics land.
 
 ## Roadmap
