@@ -1,22 +1,11 @@
-"""DanceTrack support: confirm it "just works" via the existing MOTChallenge
-ingest, with no dedicated adapter code.
+"""DanceTrack support: confirmed via the existing MOTChallenge ingest, no new
+adapter code needed — its gt.txt/results format is byte-for-byte MOTChallenge's
+(always class=1/consider=1), and TrackEval evaluates it via plain
+MotChallenge2DBox with no DanceTrack-specific preprocessing branch.
 
-DanceTrack's ``gt.txt``/tracker-result format is byte-for-byte MOTChallenge's:
-``frame, id, bb_left, bb_top, bb_width, bb_height, 1, 1, 1`` for ground truth
-(consider=1, class=1/pedestrian, visibility=1 — always) and
-``frame, id, bb_left, bb_top, bb_width, bb_height, conf, -1, -1, -1`` for
-tracker results. DanceTrack's own evaluation instructions point at TrackEval's
-``run_mot_challenge.py`` (``MotChallenge2DBox``) directly — there is no
-DanceTrack-specific dataset class in TrackEval, and no benchmark-specific
-branch for it in ``get_preprocessed_seq_data`` (only "MOT20" and "MOT15" get
-special-cased). Since every gt row is always class=1/keep=1, preprocessing is
-a guaranteed no-op: nothing is ever dropped.
-
-This test proves that claim rather than assuming it: a synthetic sequence
-(with misses, id switches, and a false positive — not a toy) is round-tripped
-through DanceTrack-formatted files and checked against
-(1) the original in-memory sequence, (2) TrackEval's real (unmodified)
-``get_preprocessed_seq_data``, and (3) TrackEval's real metric classes.
+Round-trips a synthetic sequence through DanceTrack-formatted files and checks
+it against the original sequence, TrackEval's real (unmodified) preprocessing,
+and TrackEval's real metric classes — not just self-consistency.
 """
 
 from __future__ import annotations
