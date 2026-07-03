@@ -1,6 +1,7 @@
 # motrics
 
 [![CI](https://github.com/kevinconka/motrics/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinconka/motrics/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/motrics)](https://pypi.org/project/motrics/)
 [![License](https://img.shields.io/github/license/kevinconka/motrics)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -10,7 +11,7 @@ An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
 
 ## Highlights
 
-- ⚡ **Extremely fast** — Rust core, ~3–14× faster than TrackEval and
+- ⚡ **Extremely fast** — Rust core, ~7–16× faster than TrackEval and
   py-motmetrics on real MOT17 data.
 - 🎯 **Numerically validated** — exact parity with TrackEval on CLEAR,
   Identity, and HOTA, checked in CI.
@@ -23,13 +24,12 @@ An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
 
 ## Install
 
-Not on PyPI yet — build from source:
-
 ```bash
-uv sync --group dev        # create the environment + install dev tools
-uv run maturin develop     # compile the Rust extension into the venv
-uv run python -c "import motrics; print(motrics.version())"
+pip install motrics
 ```
+
+Prebuilt wheels for Linux, macOS, and Windows (Python 3.10+). Building from
+source instead? See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup.
 
 ## Quickstart
 
@@ -160,14 +160,15 @@ per-frame Python bookkeeping)? Here's how the field names line up:
 
 ## Benchmarks
 
-On real MOT17 data, release build:
+On real MOT17 data, release build, end-to-end from raw boxes:
 
-| motrics vs…   | CLEAR + Identity | With HOTA |
-| ------------- | ---------------- | --------- |
-| TrackEval     | ~3–4×            | ~6×       |
-| py-motmetrics | ~14×             | —         |
+| motrics vs…   | Metrics                | Speedup |
+| ------------- | ----------------------- | ------- |
+| TrackEval     | CLEAR + Identity + HOTA | ~7–9×   |
+| py-motmetrics | CLEAR + Identity        | ~12–16× |
 
-Numbers are illustrative and machine-dependent. See
+Numbers are illustrative and machine-dependent — see the CI benchmark comment
+on any PR for a live measurement. See
 [`benchmarks/README.md`](benchmarks/README.md) for methodology and how to run
 it yourself.
 
@@ -175,6 +176,8 @@ it yourself.
 <summary>Roadmap</summary>
 
 - [x] Project scaffolding (build, lint, packaging, CI)
+- [x] Published to PyPI (`pip install motrics`), automated releases via
+      [release-plz](https://release-plz.dev/)
 - [x] Bounding-box IoU + assignment (Hungarian/greedy) primitives
 - [x] CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
 - [x] Identity metrics (IDF1 / IDP / IDR)
