@@ -27,6 +27,11 @@ classifiers = [
 # Version is sourced from Cargo.toml by maturin (see [tool.maturin] below).
 dynamic = ["version"]
 
+[project.optional-dependencies]
+# motrics.compat.motmetrics' MetricsHost.compute() returns a pandas DataFrame
+# (matching motmetrics), so it needs pandas even though the core doesn't.
+compat = ["pandas>=2.0"]
+
 [project.urls]
 Homepage = "https://github.com/kevinconka/motrics"
 Repository = "https://github.com/kevinconka/motrics"

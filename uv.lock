@@ -597,6 +597,12 @@ wheels = [
 name = "motrics"
 source = { editable = "." }
 
+[package.optional-dependencies]
+compat = [
+    { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pandas", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "maturin" },
@@ -613,6 +619,8 @@ parity = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "pandas", marker = "extra == 'compat'", specifier = ">=2.0" }]
+provides-extras = ["compat"]
 
 [package.metadata.requires-dev]
 dev = [
