@@ -110,15 +110,18 @@ print(results["MotChallenge2DBox"]["my_tracker"]["COMBINED_SEQ"]["pedestrian"]["
 
 Same class names, config keys, directory/seqmap conventions
 (`GT_FOLDER/BENCHMARK-SPLIT/<seq>/gt/gt.txt`, a seqmap file, per-sequence
-`seqinfo.ini`), and result shape as real TrackEval — no `trackeval`/`scipy`
-install required. `HOTA`/`CLEAR`/`Identity` field values are verified
-bit-exact against real TrackEval.
+`seqinfo.ini`), and result shape as real TrackEval, no `trackeval`/`scipy`
+install required — but only for the subset below. `HOTA`, `Identity`, and
+`CLEAR`'s `MOTA`/`MOTP` fields are verified bit-exact against real TrackEval;
+unsupported config or fields raise rather than silently returning a wrong
+number.
 
 - `pip install motrics[compat]` (pulls in numpy, needed only for this
   subpackage — HOTA's per-alpha fields are numpy arrays, matching TrackEval).
 - Not implemented: parallel evaluation, error-handling config
   (`BREAK_ON_ERROR`/etc. — always raises immediately), printing/file
-  output/plotting; zipped input (`INPUT_AS_ZIP`); `CLEAR` fields beyond
+  output/plotting; zipped input (`INPUT_AS_ZIP`); `DO_PREPROC=False` and
+  `BENCHMARK="MOT15"` (raise at construction); `CLEAR` fields beyond
   `MOTA`/`MOTP` (`MT`/`PT`/`ML`/`Frag`/`MODA`/`sMOTA`/etc. need
   mostly-tracked/lost and fragmentation bookkeeping the Rust core doesn't
   compute yet); `IDEucl`/`JAndF`/`TrackMAP`/`VACE` metrics.

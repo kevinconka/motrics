@@ -26,8 +26,9 @@ MOTChallenge evaluation API, backed by motrics' Rust core::
 
 Same class names, config keys, directory/seqmap conventions, and result shape
 (``results[dataset][tracker][seq_or_"COMBINED_SEQ"][cls][metric]["FIELD"]``) as
-real TrackEval — swap the import in an existing evaluation script and it
-should just work, no ``trackeval``/``scipy`` install required.
+real TrackEval, no ``trackeval``/``scipy`` install required — but only for the
+subset described below; an evaluation script using unsupported config or
+metric fields will raise rather than silently return a wrong number.
 
 What's NOT implemented (see each module's docstring for specifics):
 
@@ -36,7 +37,8 @@ What's NOT implemented (see each module's docstring for specifics):
   always raises immediately, never writes files.
 - ``datasets.MotChallenge2DBox``: zipped input (``INPUT_AS_ZIP``), classes
   other than ``pedestrian`` (TrackEval's own MOT Challenge adapter is
-  pedestrian-only too, so this isn't a gap versus TrackEval itself).
+  pedestrian-only too, so this isn't a gap versus TrackEval itself),
+  ``DO_PREPROC=False``, and ``BENCHMARK="MOT15"`` (raises at construction).
 - ``metrics.CLEAR``: only ``MOTA``/``MOTP`` — not ``MT``/``PT``/``ML``/``Frag``/
   ``MODA``/``sMOTA``/etc., which need mostly-tracked/lost and fragmentation
   bookkeeping the Rust core doesn't compute yet.

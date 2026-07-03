@@ -136,11 +136,13 @@ pub fn compute_hota(frames: &[Frame]) -> HotaMetrics {
     if n_t == 0 {
         result.hota_fn_alphas = vec![result.num_gt as f64; n_a];
         result.loca_alphas = vec![1.0; n_a];
+        result.loca = 1.0;
         return result;
     }
     if n_g == 0 {
         result.hota_fp_alphas = vec![result.num_pred as f64; n_a];
         result.loca_alphas = vec![1.0; n_a];
+        result.loca = 1.0;
         return result;
     }
 
@@ -332,6 +334,7 @@ mod tests {
         assert_eq!(m.num_gt, 0);
         assert!(m.hota_fp_alphas.iter().all(|&v| v == 1.0));
         assert!(m.loca_alphas.iter().all(|&v| v == 1.0));
+        assert_eq!(m.loca, 1.0);
     }
 
     #[test]
@@ -342,6 +345,7 @@ mod tests {
         assert_eq!(m.num_gt, 1);
         assert!(m.hota_fn_alphas.iter().all(|&v| v == 1.0));
         assert!(m.loca_alphas.iter().all(|&v| v == 1.0));
+        assert_eq!(m.loca, 1.0);
     }
 
     #[test]

@@ -9,7 +9,10 @@ counts). Preprocessing delegates to :func:`motrics.load_motchallenge_gt` /
 
 Not implemented: ``INPUT_AS_ZIP`` (zipped tracker/gt input) and classes other
 than ``pedestrian`` — TrackEval's own MOT Challenge adapter only supports
-pedestrian too, so this isn't a gap versus TrackEval itself.
+pedestrian too, so this isn't a gap versus TrackEval itself. ``DO_PREPROC=False``
+and ``BENCHMARK="MOT15"`` (which implies no preprocessing) raise at
+construction rather than silently diverging from TrackEval, since
+:func:`motrics.preprocess_motchallenge` has no raw/unpreprocessed path.
 """
 
 from __future__ import annotations
@@ -60,6 +63,11 @@ class MotChallenge2DBox:
         self.should_classes_combine = False
         self.use_super_categories = False
         self.do_preproc = self.config["DO_PREPROC"]
+        if not self.do_preproc or self.benchmark == "MOT15":
+            raise TrackEvalException(
+                "DO_PREPROC=False and BENCHMARK='MOT15' are not supported: "
+                "preprocess_motchallenge() has no raw (non-preprocessing) path."
+            )
 
         self.output_fol = self.config["OUTPUT_FOLDER"] or self.tracker_fol
         self.tracker_sub_fol = self.config["TRACKER_SUB_FOLDER"]

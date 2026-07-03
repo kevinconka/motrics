@@ -133,3 +133,17 @@ def test_matches_real_trackeval_end_to_end(tmp_path: Path) -> None:
     assert mine["MOT17-02"]["pedestrian"]["CLEAR"]["CLR_TP"] == 2
     assert mine["MOT17-02"]["pedestrian"]["CLEAR"]["CLR_FP"] == 1
     assert mine["MOT17-02"]["pedestrian"]["CLEAR"]["IDSW"] == 0
+
+
+def test_do_preproc_false_raises(tmp_path: Path) -> None:
+    gt_folder, trackers_folder = _build_dataset_dir(tmp_path)
+    config = {**_dataset_config(gt_folder, trackers_folder), "DO_PREPROC": False}
+    with pytest.raises(trackeval.TrackEvalException):
+        trackeval.datasets.MotChallenge2DBox(config)
+
+
+def test_mot15_benchmark_raises(tmp_path: Path) -> None:
+    gt_folder, trackers_folder = _build_dataset_dir(tmp_path)
+    config = {**_dataset_config(gt_folder, trackers_folder), "BENCHMARK": "MOT15"}
+    with pytest.raises(trackeval.TrackEvalException):
+        trackeval.datasets.MotChallenge2DBox(config)

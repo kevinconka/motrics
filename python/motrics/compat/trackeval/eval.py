@@ -75,24 +75,30 @@ class Evaluator:
                     )
                     for seq in sorted(seq_list)
                 }
-                res["COMBINED_SEQ"] = {
-                    cls: {
-                        metric_name: metric.combine_sequences(
-                            {
-                                seq: seq_res[cls][metric_name]
-                                for seq, seq_res in res.items()
-                            }
-                        )
-                        for metric, metric_name in zip(
-                            metrics_list, metric_names, strict=True
-                        )
-                    }
-                    for cls in class_list
-                }
+                res["COMBINED_SEQ"] = _combine_seq(
+                    res, class_list, metrics_list, metric_names
+                )
                 output_res[dataset_name][tracker] = res
                 output_msg[dataset_name][tracker] = "Success"
 
         return output_res, output_msg
+
+
+def _combine_seq(
+    res: dict[str, Any],
+    class_list: list[str],
+    metrics_list: list[Any],
+    metric_names: list[str],
+) -> dict[str, Any]:
+    return {
+        cls: {
+            metric_name: metric.combine_sequences(
+                {seq: seq_res[cls][metric_name] for seq, seq_res in res.items()}
+            )
+            for metric, metric_name in zip(metrics_list, metric_names, strict=True)
+        }
+        for cls in class_list
+    }
 
 
 def _eval_sequence(
