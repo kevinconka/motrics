@@ -1,5 +1,3 @@
 [workspace]
-# motrics isn't published to any cargo registry. git_only (release-plz#2693)
-# still attempted `cargo publish` and failed on the first real run; plain
-# publish=false is the older, more established flag for this.
+# motrics isn't published to any cargo registry.
 publish = false
