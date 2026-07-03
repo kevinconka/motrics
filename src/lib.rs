@@ -498,6 +498,30 @@ impl HotaMetrics {
     }
 }
 
+impl From<hota::HotaMetrics> for HotaMetrics {
+    fn from(m: hota::HotaMetrics) -> Self {
+        HotaMetrics {
+            hota: m.hota,
+            deta: m.deta,
+            assa: m.assa,
+            loca: m.loca,
+            alphas: m.alphas,
+            hota_alphas: m.hota_alphas,
+            deta_alphas: m.deta_alphas,
+            assa_alphas: m.assa_alphas,
+            loca_alphas: m.loca_alphas,
+            hota_tp_alphas: m.hota_tp_alphas,
+            hota_fn_alphas: m.hota_fn_alphas,
+            hota_fp_alphas: m.hota_fp_alphas,
+            ass_re_alphas: m.ass_re_alphas,
+            ass_pr_alphas: m.ass_pr_alphas,
+            num_frames: m.num_frames,
+            num_gt: m.num_gt,
+            num_pred: m.num_pred,
+        }
+    }
+}
+
 /// Compute HOTA metrics (DetA, AssA, LocA, plus per-alpha curves) for a sequence.
 ///
 /// Inputs are frame-aligned exactly like [`compute_clear`]. HOTA sweeps a set of
@@ -516,25 +540,102 @@ fn compute_hota(
     let gt_boxes = to_xyxy_frames(&gt_boxes, format)?;
     let pred_boxes = to_xyxy_frames(&pred_boxes, format)?;
     let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
-    let m = hota::compute_hota(&frames);
-    Ok(HotaMetrics {
-        hota: m.hota,
-        deta: m.deta,
-        assa: m.assa,
-        loca: m.loca,
-        alphas: m.alphas,
-        hota_alphas: m.hota_alphas,
-        deta_alphas: m.deta_alphas,
-        assa_alphas: m.assa_alphas,
-        loca_alphas: m.loca_alphas,
-        hota_tp_alphas: m.hota_tp_alphas,
-        hota_fn_alphas: m.hota_fn_alphas,
-        hota_fp_alphas: m.hota_fp_alphas,
-        ass_re_alphas: m.ass_re_alphas,
-        ass_pr_alphas: m.ass_pr_alphas,
-        num_frames: m.num_frames,
-        num_gt: m.num_gt,
-        num_pred: m.num_pred,
+    Ok(hota::compute_hota(&frames).into())
+}
+
+/// Compute HOTA metrics from precomputed per-frame similarity matrices instead
+/// of boxes. Same similarity convention as [`compute_clear_from_similarity`].
+#[pyfunction]
+#[pyo3(signature = (gt_ids, pred_ids, similarity))]
+fn compute_hota_from_similarity(
+    gt_ids: Vec<Vec<i64>>,
+    pred_ids: Vec<Vec<i64>>,
+    similarity: Vec<Vec<Vec<f64>>>,
+) -> PyResult<HotaMetrics> {
+    let frames = build_sim_frames(&gt_ids, &pred_ids, &similarity)?;
+    Ok(hota::compute_hota_from_similarity(&frames).into())
+}
+
+/// The result of [`evaluate`]: CLEAR, Identity, and HOTA computed together
+/// from one shared similarity matrix.
+#[pyclass(frozen)]
+struct EvaluationResult {
+    /// CLEAR MOT metrics (MOTA, MOTP, FP, FN, ID switches).
+    #[pyo3(get)]
+    clear: Py<ClearMetrics>,
+    /// Identity metrics (IDF1, IDP, IDR).
+    #[pyo3(get)]
+    identity: Py<IdentityMetrics>,
+    /// HOTA metrics (DetA, AssA, LocA, plus per-alpha curves).
+    #[pyo3(get)]
+    hota: Py<HotaMetrics>,
+}
+
+#[pymethods]
+impl EvaluationResult {
+    fn __repr__(&self, py: Python<'_>) -> String {
+        format!(
+            "EvaluationResult(clear={}, identity={}, hota={})",
+            self.clear.borrow(py).__repr__(),
+            self.identity.borrow(py).__repr__(),
+            self.hota.borrow(py).__repr__(),
+        )
+    }
+}
+
+/// Compute CLEAR, Identity, and HOTA together for a sequence.
+///
+/// Inputs are frame-aligned exactly like [`compute_clear`]. Builds the
+/// gt/pred similarity matrix once and reuses it for all three metrics,
+/// instead of recomputing it once per metric (what calling `compute_clear`,
+/// `compute_identity`, and `compute_hota` separately would do).
+#[pyfunction]
+#[pyo3(signature = (gt_ids, gt_boxes, pred_ids, pred_boxes, iou_threshold=0.5, box_format="xyxy"))]
+fn evaluate(
+    py: Python<'_>,
+    gt_ids: Vec<Vec<i64>>,
+    gt_boxes: Vec<PyBoxes>,
+    pred_ids: Vec<Vec<i64>>,
+    pred_boxes: Vec<PyBoxes>,
+    iou_threshold: f64,
+    box_format: &str,
+) -> PyResult<EvaluationResult> {
+    let format = BoxFormat::parse(box_format)?;
+    let gt_boxes = to_xyxy_frames(&gt_boxes, format)?;
+    let pred_boxes = to_xyxy_frames(&pred_boxes, format)?;
+    let frames = build_frames(&gt_ids, &gt_boxes, &pred_ids, &pred_boxes)?;
+    let similarity: Vec<Vec<Vec<f64>>> = frames
+        .iter()
+        .map(|f| iou::iou_matrix(f.gt_boxes, f.pred_boxes))
+        .collect();
+    let sim_frames: Vec<clear::SimFrame> = frames
+        .iter()
+        .zip(&similarity)
+        .map(|(f, s)| clear::SimFrame {
+            gt_ids: f.gt_ids,
+            pred_ids: f.pred_ids,
+            similarity: s,
+        })
+        .collect();
+    Ok(EvaluationResult {
+        clear: Py::new(
+            py,
+            ClearMetrics::from(clear::compute_clear_from_similarity(
+                &sim_frames,
+                iou_threshold,
+            )),
+        )?,
+        identity: Py::new(
+            py,
+            IdentityMetrics::from(identity::compute_identity_from_similarity(
+                &sim_frames,
+                iou_threshold,
+            )),
+        )?,
+        hota: Py::new(
+            py,
+            HotaMetrics::from(hota::compute_hota_from_similarity(&sim_frames)),
+        )?,
     })
 }
 
@@ -552,9 +653,12 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_identity, m)?)?;
     m.add_function(wrap_pyfunction!(compute_identity_from_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(compute_hota, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_hota_from_similarity, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate, m)?)?;
     m.add_class::<Matching>()?;
     m.add_class::<ClearMetrics>()?;
     m.add_class::<IdentityMetrics>()?;
     m.add_class::<HotaMetrics>()?;
+    m.add_class::<EvaluationResult>()?;
     Ok(())
 }

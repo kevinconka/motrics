@@ -30,10 +30,10 @@ from motrics._motrics import match_boxes
 # A bounding box in xyxy format: (x1, y1, x2, y2).
 Bbox = tuple[float, float, float, float]
 # Per-frame detections: frame number -> (object ids, boxes).
-Frames = dict[int, tuple[list[int], list[Bbox]]]
+_ByFrame = dict[int, tuple[list[int], list[Bbox]]]
 # Per-frame ground truth with the extra columns preprocessing needs:
 # frame number -> (ids, boxes, class ids, "consider this box" flags).
-GtFrames = dict[int, tuple[list[int], list[Bbox], list[int], list[bool]]]
+_GtByFrame = dict[int, tuple[list[int], list[Bbox], list[int], list[bool]]]
 
 #: MOTChallenge class id for the evaluated class; every other class exists
 #: only to drive preprocessing (see :func:`preprocess_motchallenge`).
@@ -59,7 +59,7 @@ def _box(parts: list[str]) -> Bbox:
 
 def load_motchallenge(
     path: str | PathLike[str], *, min_confidence: float | None = None
-) -> Frames:
+) -> _ByFrame:
     """Parse a MOTChallenge CSV file into per-frame detections.
 
     Args:
@@ -71,7 +71,7 @@ def load_motchallenge(
     Returns:
         A mapping from frame number to ``(ids, boxes)``, boxes in ``xyxy``.
     """
-    frames: Frames = {}
+    frames: _ByFrame = {}
     for parts in _read_rows(path):
         if (
             min_confidence is not None
@@ -85,7 +85,7 @@ def load_motchallenge(
     return frames
 
 
-def load_motchallenge_gt(path: str | PathLike[str]) -> GtFrames:
+def load_motchallenge_gt(path: str | PathLike[str]) -> _GtByFrame:
     """Parse a MOTChallenge ``gt.txt``, keeping the class and "consider this
     box" columns :func:`preprocess_motchallenge` needs.
 
@@ -94,7 +94,7 @@ def load_motchallenge_gt(path: str | PathLike[str]) -> GtFrames:
     :func:`preprocess_motchallenge` needs the full picture to replicate
     TrackEval's preprocessing.
     """
-    frames: GtFrames = {}
+    frames: _GtByFrame = {}
     for parts in _read_rows(path):
         ids, boxes, classes, keep = frames.setdefault(
             int(float(parts[0])), ([], [], [], [])
@@ -107,7 +107,7 @@ def load_motchallenge_gt(path: str | PathLike[str]) -> GtFrames:
 
 
 def align_frames(
-    gt: Frames, pred: Frames
+    gt: _ByFrame, pred: _ByFrame
 ) -> tuple[list[list[int]], list[list[Bbox]], list[list[int]], list[list[Bbox]]]:
     """Align two parsed sequences onto a shared, ordered frame timeline.
 
@@ -133,8 +133,8 @@ def align_frames(
 
 
 def preprocess_motchallenge(
-    gt: GtFrames,
-    pred: Frames,
+    gt: _GtByFrame,
+    pred: _ByFrame,
     *,
     iou_threshold: float = 0.5,
     benchmark: str = "MOT17",
