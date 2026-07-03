@@ -13,6 +13,7 @@
 //! The reported scalars are the mean over the alpha thresholds. Bit-exact
 //! TrackEval parity is validated in the parity-tests milestone.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::clear::{Frame, SimFrame};
@@ -64,20 +65,23 @@ fn alpha_thresholds() -> Vec<f64> {
 }
 
 /// Per-frame precomputed dense id indices and IoU matrix.
-struct FrameData {
+struct FrameData<'a> {
     gt_idx: Vec<usize>,
     pred_idx: Vec<usize>,
-    iou: Vec<Vec<f64>>,
+    iou: Cow<'a, [Vec<f64>]>,
 }
 
 /// A frame's ids plus a way to get its gt/pred similarity matrix — the only
 /// piece that differs between scoring from raw boxes and from a precomputed
 /// matrix. Lets [`compute_hota_generic`] serve both [`compute_hota`] and
 /// [`compute_hota_from_similarity`] without recomputing IoU twice.
+///
+/// Returns `Cow` rather than an owned `Vec<Vec<f64>>` so `SimFrame` (which
+/// already owns the matrix) can hand back a borrow instead of cloning it.
 trait HotaFrame {
     fn gt_ids(&self) -> &[i64];
     fn pred_ids(&self) -> &[i64];
-    fn similarity(&self) -> Vec<Vec<f64>>;
+    fn similarity(&self) -> Cow<'_, [Vec<f64>]>;
 }
 
 impl HotaFrame for Frame<'_> {
@@ -87,11 +91,11 @@ impl HotaFrame for Frame<'_> {
     fn pred_ids(&self) -> &[i64] {
         self.pred_ids
     }
-    fn similarity(&self) -> Vec<Vec<f64>> {
+    fn similarity(&self) -> Cow<'_, [Vec<f64>]> {
         if self.gt_ids.is_empty() || self.pred_ids.is_empty() {
-            Vec::new()
+            Cow::Owned(Vec::new())
         } else {
-            iou_matrix(self.gt_boxes, self.pred_boxes)
+            Cow::Owned(iou_matrix(self.gt_boxes, self.pred_boxes))
         }
     }
 }
@@ -103,11 +107,11 @@ impl HotaFrame for SimFrame<'_> {
     fn pred_ids(&self) -> &[i64] {
         self.pred_ids
     }
-    fn similarity(&self) -> Vec<Vec<f64>> {
+    fn similarity(&self) -> Cow<'_, [Vec<f64>]> {
         if self.gt_ids.is_empty() || self.pred_ids.is_empty() {
-            Vec::new()
+            Cow::Owned(Vec::new())
         } else {
-            self.similarity.to_vec()
+            Cow::Borrowed(self.similarity)
         }
     }
 }

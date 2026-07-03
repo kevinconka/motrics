@@ -59,6 +59,7 @@ def test_evaluate_respects_iou_threshold() -> None:
     loose = motrics.evaluate(gt, pred, iou_threshold=0.1)
     strict = motrics.evaluate(gt, pred, iou_threshold=0.99)
     assert loose.clear.mota != strict.clear.mota
+    assert loose.identity.idf1 != strict.identity.idf1
 
 
 @pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: s.name)
