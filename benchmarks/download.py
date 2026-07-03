@@ -30,9 +30,9 @@ Examples::
 from __future__ import annotations
 
 import argparse
-import io
 import shutil
 import sys
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -50,12 +50,12 @@ DATASETS = {
 }
 
 
-def _download(url: str) -> bytes:
+def _download(url: str, dest: Path) -> None:
+    """Stream ``url`` to ``dest`` in chunks (zips can be multi-GB)."""
     print(f"downloading {url} ...", flush=True)
-    with urllib.request.urlopen(url) as resp:
-        data = resp.read()
-    print(f"  got {len(data) / 1e6:.1f} MB", flush=True)
-    return data
+    with urllib.request.urlopen(url) as resp, open(dest, "wb") as handle:
+        shutil.copyfileobj(resp, handle)
+    print(f"  saved {dest.stat().st_size / 1e6:.1f} MB", flush=True)
 
 
 def _find_gt_files(zf: zipfile.ZipFile) -> dict[str, str]:
@@ -99,51 +99,55 @@ def main() -> int:
         shutil.rmtree(REAL_DIR)
     REAL_DIR.mkdir(parents=True, exist_ok=True)
 
-    try:
-        gt_zip_bytes = _download(f"{BASE_URL}/{DATASETS[args.dataset]}")
-    except OSError as exc:  # network blocked / host unreachable
-        print(f"error: download failed ({exc}).", file=sys.stderr)
-        print(
-            "motchallenge.net must be reachable and allowed by the egress policy; "
-            "it is blocked in the default sandbox. Run this in CI or a "
-            "permissioned session.",
-            file=sys.stderr,
-        )
-        return 1
-
-    tracker_zf: zipfile.ZipFile | None = None
-    if args.tracker_zip:
-        tracker_zf = zipfile.ZipFile(io.BytesIO(_download(args.tracker_zip)))
-
-    count = 0
-    with zipfile.ZipFile(io.BytesIO(gt_zip_bytes)) as zf:
-        gt_files = _find_gt_files(zf)
-        if not gt_files:
-            print("error: no gt/gt.txt found in the zip.", file=sys.stderr)
+    with tempfile.TemporaryDirectory() as tmp_str:
+        tmp = Path(tmp_str)
+        gt_zip = tmp / "gt.zip"
+        try:
+            _download(f"{BASE_URL}/{DATASETS[args.dataset]}", gt_zip)
+            tracker_zip = None
+            if args.tracker_zip:
+                tracker_zip = tmp / "tracker.zip"
+                _download(args.tracker_zip, tracker_zip)
+        except OSError as exc:  # network blocked / host unreachable
+            print(f"error: download failed ({exc}).", file=sys.stderr)
+            print(
+                "motchallenge.net must be reachable and allowed by the egress "
+                "policy; it is blocked in the default sandbox. Run this in CI or "
+                "a permissioned session.",
+                file=sys.stderr,
+            )
             return 1
-        wanted = set(args.sequences) if args.sequences else set(gt_files)
-        for seq, member in sorted(gt_files.items()):
-            if seq not in wanted:
-                continue
-            seq_dir = REAL_DIR / seq
-            (seq_dir / "gt").mkdir(parents=True, exist_ok=True)
-            (seq_dir / "gt" / "gt.txt").write_bytes(zf.read(member))
 
-            # pred.txt: from a tracker zip if given, else seed from gt.
-            pred_written = False
-            if tracker_zf is not None:
-                for tname in tracker_zf.namelist():
-                    if Path(tname).stem == seq and tname.endswith(".txt"):
-                        (seq_dir / "pred.txt").write_bytes(tracker_zf.read(tname))
-                        pred_written = True
-                        break
-            if not pred_written:
-                shutil.copyfile(seq_dir / "gt" / "gt.txt", seq_dir / "pred.txt")
-            count += 1
-            print(f"  extracted {seq}")
+        count = 0
+        tracker_zf = zipfile.ZipFile(tracker_zip) if tracker_zip else None
+        with zipfile.ZipFile(gt_zip) as zf:
+            gt_files = _find_gt_files(zf)
+            if not gt_files:
+                print("error: no gt/gt.txt found in the zip.", file=sys.stderr)
+                return 1
+            wanted = set(args.sequences) if args.sequences else set(gt_files)
+            for seq, member in sorted(gt_files.items()):
+                if seq not in wanted:
+                    continue
+                seq_dir = REAL_DIR / seq
+                (seq_dir / "gt").mkdir(parents=True, exist_ok=True)
+                (seq_dir / "gt" / "gt.txt").write_bytes(zf.read(member))
 
-    if tracker_zf is not None:
-        tracker_zf.close()
+                # pred.txt: from a tracker zip if given, else seed from gt.
+                pred_written = False
+                if tracker_zf is not None:
+                    for tname in tracker_zf.namelist():
+                        if Path(tname).stem == seq and tname.endswith(".txt"):
+                            (seq_dir / "pred.txt").write_bytes(tracker_zf.read(tname))
+                            pred_written = True
+                            break
+                if not pred_written:
+                    shutil.copyfile(seq_dir / "gt" / "gt.txt", seq_dir / "pred.txt")
+                count += 1
+                print(f"  extracted {seq}")
+
+        if tracker_zf is not None:
+            tracker_zf.close()
 
     print(f"\ndone: {count} sequence(s) under {REAL_DIR}")
     print("run: uv run python benchmarks/benchmark.py")
