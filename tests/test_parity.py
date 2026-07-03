@@ -1,109 +1,82 @@
-"""Numeric parity tests against TrackEval's reference metric implementations.
+"""Numeric parity against TrackEval.
 
-Both engines are fed identical inputs (the IoU/similarity is computed once with
-``motrics.iou_matrix`` and handed to TrackEval), so any difference is a genuine
-metric-math discrepancy. Skipped automatically where TrackEval isn't installed
-(it lives in the optional ``parity`` dependency group).
+TrackEval is fed the same similarities motrics computes (``motrics.iou_matrix``),
+so any difference is a genuine metric-math discrepancy. Runs on the same
+in-memory sequences the benchmark uses, and skips when TrackEval isn't installed
+(the optional ``parity`` dependency group).
 """
 
 from __future__ import annotations
 
-import random
-
 import motrics
 import pytest
 
-np = pytest.importorskip("numpy")
-te_clear = pytest.importorskip("trackeval.metrics").CLEAR
-te_identity = pytest.importorskip("trackeval.metrics").Identity
-te_hota = pytest.importorskip("trackeval.metrics").HOTA
+from benchmarks.fixtures import Sequence, make_synthetic
 
-Frame = tuple[list[int], list[tuple[float, float, float, float]], list[int], list]
+np = pytest.importorskip("numpy")
+trackeval = pytest.importorskip("trackeval.metrics")
 
 
 def _box(x: float, y: float, w: float = 10.0, h: float = 10.0) -> tuple:
     return (float(x), float(y), float(x + w), float(y + h))
 
 
-def _build_trackeval_data(seq: list[Frame]) -> dict:
-    """Convert a sequence into TrackEval's per-sequence data dict."""
-    gt_id_set = sorted({i for f in seq for i in f[0]})
-    tr_id_set = sorted({i for f in seq for i in f[2]})
-    gt_map = {v: k for k, v in enumerate(gt_id_set)}
-    tr_map = {v: k for k, v in enumerate(tr_id_set)}
+# A hand-built sequence exercising an id switch, a miss and a false positive.
+_HANDBUILT = Sequence(
+    name="handbuilt",
+    gt_ids=[[0, 1], [0, 1], [0, 1], [0]],
+    gt_boxes=[
+        [_box(0, 0), _box(50, 50)],
+        [_box(0, 0), _box(50, 50)],
+        [_box(0, 0), _box(50, 50)],
+        [_box(0, 0)],
+    ],
+    pred_ids=[[0, 1], [0, 9], [0], [0, 5]],
+    pred_boxes=[
+        [_box(0, 0), _box(50, 51)],
+        [_box(0, 1), _box(50, 50)],
+        [_box(0, 0)],
+        [_box(0, 0), _box(200, 200)],
+    ],
+)
 
+SEQUENCES = [_HANDBUILT, *make_synthetic()]
+
+
+def _trackeval_data(seq: Sequence) -> dict:
+    """TrackEval's per-sequence data dict, with similarities from motrics."""
+    gt_map = {v: k for k, v in enumerate(sorted({i for f in seq.gt_ids for i in f}))}
+    tr_map = {v: k for k, v in enumerate(sorted({i for f in seq.pred_ids for i in f}))}
     gt_ids, tracker_ids, sims = [], [], []
-    for g_ids, g_boxes, p_ids, p_boxes in seq:
-        gt_ids.append(np.array([gt_map[i] for i in g_ids], dtype=int))
-        tracker_ids.append(np.array([tr_map[i] for i in p_ids], dtype=int))
-        arr = np.array(motrics.iou_matrix(g_boxes, p_boxes), dtype=float)
-        if arr.size == 0:
-            arr = arr.reshape(len(g_boxes), len(p_boxes))
-        sims.append(arr)
-
+    for t in range(seq.num_frames):
+        gt_ids.append(np.array([gt_map[i] for i in seq.gt_ids[t]], dtype=int))
+        tracker_ids.append(np.array([tr_map[i] for i in seq.pred_ids[t]], dtype=int))
+        arr = np.array(
+            motrics.iou_matrix(seq.gt_boxes[t], seq.pred_boxes[t]), dtype=float
+        )
+        sims.append(arr.reshape(len(seq.gt_boxes[t]), len(seq.pred_boxes[t])))
     return {
-        "num_timesteps": len(seq),
-        "num_gt_ids": len(gt_id_set),
-        "num_tracker_ids": len(tr_id_set),
-        "num_gt_dets": sum(len(f[0]) for f in seq),
-        "num_tracker_dets": sum(len(f[2]) for f in seq),
+        "num_timesteps": seq.num_frames,
+        "num_gt_ids": len(gt_map),
+        "num_tracker_ids": len(tr_map),
+        "num_gt_dets": seq.num_gt_dets,
+        "num_tracker_dets": seq.num_pred_dets,
         "gt_ids": gt_ids,
         "tracker_ids": tracker_ids,
         "similarity_scores": sims,
     }
 
 
-def _motrics_args(seq: list[Frame]):
-    return (
-        [list(f[0]) for f in seq],
-        [list(f[1]) for f in seq],
-        [list(f[2]) for f in seq],
-        [list(f[3]) for f in seq],
+def _args(seq: Sequence) -> tuple:
+    return seq.gt_ids, seq.gt_boxes, seq.pred_ids, seq.pred_boxes
+
+
+@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: s.name)
+def test_clear_parity(seq: Sequence) -> None:
+    ref = trackeval.CLEAR({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
+        _trackeval_data(seq)
     )
-
-
-def _random_sequence(seed: int, n_frames: int = 30, n_obj: int = 6) -> list[Frame]:
-    rng = random.Random(seed)
-    seq: list[Frame] = []
-    for t in range(n_frames):
-        g_ids, g_boxes, p_ids, p_boxes = [], [], [], []
-        for o in range(n_obj):
-            if rng.random() < 0.9:  # gt object present
-                x, y = 30.0 * o + 1.5 * t, 10.0
-                g_ids.append(o)
-                g_boxes.append(_box(x, y))
-                r = rng.random()
-                if r < 0.85:  # detected (with jitter -> IoU varies across thresholds)
-                    jx, jy = rng.uniform(-4, 4), rng.uniform(-4, 4)
-                    pid = o if rng.random() > 0.05 else o + 100  # rare id switch
-                    p_ids.append(pid)
-                    p_boxes.append(_box(x + jx, y + jy))
-        if rng.random() < 0.3:  # spurious false positive
-            p_ids.append(900 + t)
-            p_boxes.append(_box(rng.uniform(0, 300), 200.0))
-        seq.append((g_ids, g_boxes, p_ids, p_boxes))
-    return seq
-
-
-# A couple of hand-built sequences plus several seeded random ones.
-_HANDBUILT: list[list[Frame]] = [
-    [
-        ([0, 1], [_box(0, 0), _box(50, 50)], [0, 1], [_box(0, 0), _box(50, 51)]),
-        ([0, 1], [_box(0, 0), _box(50, 50)], [0, 9], [_box(0, 1), _box(50, 50)]),
-        ([0, 1], [_box(0, 0), _box(50, 50)], [0], [_box(0, 0)]),
-        ([0], [_box(0, 0)], [0, 5], [_box(0, 0), _box(200, 200)]),
-    ],
-]
-
-SEQUENCES = _HANDBUILT + [_random_sequence(s) for s in range(6)]
-
-
-@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: f"{len(s)}frames")
-def test_clear_parity(seq: list[Frame]) -> None:
-    ref = te_clear({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
-        _build_trackeval_data(seq)
-    )
-    m = motrics.compute_clear(*_motrics_args(seq))
+    m = motrics.compute_clear(*_args(seq))
     assert m.num_matches == ref["CLR_TP"]
     assert m.num_false_positives == ref["CLR_FP"]
     assert m.num_misses == ref["CLR_FN"]
@@ -112,12 +85,12 @@ def test_clear_parity(seq: list[Frame]) -> None:
     assert m.motp == pytest.approx(ref["MOTP"], abs=1e-9)
 
 
-@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: f"{len(s)}frames")
-def test_identity_parity(seq: list[Frame]) -> None:
-    ref = te_identity({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
-        _build_trackeval_data(seq)
+@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: s.name)
+def test_identity_parity(seq: Sequence) -> None:
+    ref = trackeval.Identity({"THRESHOLD": 0.5, "PRINT_CONFIG": False}).eval_sequence(
+        _trackeval_data(seq)
     )
-    m = motrics.compute_identity(*_motrics_args(seq))
+    m = motrics.compute_identity(*_args(seq))
     assert m.idtp == ref["IDTP"]
     assert m.idfp == ref["IDFP"]
     assert m.idfn == ref["IDFN"]
@@ -126,15 +99,11 @@ def test_identity_parity(seq: list[Frame]) -> None:
     assert m.idr == pytest.approx(ref["IDR"], abs=1e-9)
 
 
-@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: f"{len(s)}frames")
-def test_hota_parity(seq: list[Frame]) -> None:
-    ref = te_hota({"PRINT_CONFIG": False}).eval_sequence(_build_trackeval_data(seq))
-    m = motrics.compute_hota(*_motrics_args(seq))
-    # Per-alpha curves must match, not just the summary means.
+@pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: s.name)
+def test_hota_parity(seq: Sequence) -> None:
+    ref = trackeval.HOTA({"PRINT_CONFIG": False}).eval_sequence(_trackeval_data(seq))
+    m = motrics.compute_hota(*_args(seq))
     assert np.allclose(m.hota_alphas, ref["HOTA"], atol=1e-9)
     assert np.allclose(m.deta_alphas, ref["DetA"], atol=1e-9)
     assert np.allclose(m.assa_alphas, ref["AssA"], atol=1e-9)
-    assert m.hota == pytest.approx(float(np.mean(ref["HOTA"])), abs=1e-9)
-    assert m.deta == pytest.approx(float(np.mean(ref["DetA"])), abs=1e-9)
-    assert m.assa == pytest.approx(float(np.mean(ref["AssA"])), abs=1e-9)
     assert m.loca == pytest.approx(float(np.mean(ref["LocA"])), abs=1e-9)

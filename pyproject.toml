@@ -46,8 +46,13 @@ dev = [
     "ruff>=0.9",
     "ty>=0.0.1a1",
 ]
+# Reference evaluators for parity + benchmarking (scipy comes in transitively).
 parity = [
     "numpy>=2.2.6",
-    "scipy>=1.15.3",
     "trackeval>=1.3.0",
+    "motmetrics>=1.4.0",
 ]
+
+[tool.pytest.ini_options]
+# Let tests import the shared benchmark fixtures (benchmarks.fixtures).
+pythonpath = ["."]

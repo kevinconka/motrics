@@ -74,6 +74,28 @@ uv run maturin develop && uv run pytest
 
 Optional: `pre-commit install` to run the formatters/linters on every commit.
 
+### Benchmarks
+
+`benchmarks/` checks numeric parity and measures speed against
+[TrackEval](https://github.com/JonathonLuiten/TrackEval) and
+[py-motmetrics](https://github.com/cheind/py-motmetrics):
+
+```bash
+uv sync --group parity && uv run maturin develop --release --uv
+uv run python benchmarks/download.py     # fetch real MOT17-train sequences
+uv run python benchmarks/benchmark.py
+```
+
+Roughly how much faster motrics is on real MOT17 (release build; illustrative,
+machine-dependent):
+
+| motrics vs…   | CLEAR + Identity | With HOTA |
+| ------------- | ---------------- | --------- |
+| TrackEval     | ~3–4×            | ~6×       |
+| py-motmetrics | ~14×             | —         |
+
+See [`benchmarks/README.md`](benchmarks/README.md) for how to run it.
+
 ## Roadmap
 
 - [x] Project scaffolding (build, lint, packaging, CI)
@@ -83,11 +105,30 @@ Optional: `pre-commit install` to run the formatters/linters on every commit.
 - [x] HOTA (DetA, AssA, alpha sweep)
 - [x] MOTChallenge ingest + integration tests
 - [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
-- [ ] Real-data benchmark & parity — unify parity/benchmark on shared
-      MOTChallenge-format fixtures, commit a reproducible `benchmarks/`, and
-      validate parity + measure speedups on real MOTChallenge sequences
-      (needs network access to download the dataset; unavailable in the current
-      sandbox but works in CI/local)
+- [x] Benchmark & parity infrastructure vs **TrackEval** and **py-motmetrics**,
+      on real MOTChallenge data, validated in CI. See
+      [`benchmarks/README.md`](benchmarks/README.md) for methodology, numbers,
+      and caveats.
+  - [ ] Zero-copy NumPy input path (folds into "broaden core inputs" below).
+- [ ] Replace TrackEval / py-motmetrics, not just benchmark against them:
+  - [ ] Migration guide + metric-name map.
+  - [ ] `motrics.compat.motmetrics` — a drop-in `MOTAccumulator` replacement
+        (small surface, no motmetrics installed).
+  - [ ] `motrics.compat.trackeval` — a drop-in for the MOTChallenge evaluation
+        path (`Evaluator`/dataset/metrics), no TrackEval installed. Gated on
+        TrackEval-parity MOTChallenge preprocessing below.
+  - [ ] Broaden core inputs (precomputed similarity matrices, `xywh` boxes,
+        zero-copy NumPy) so users pass what they already hold.
+  - [ ] MOTChallenge ingest with TrackEval-parity preprocessing (confidence,
+        class/distractor/ignore-region handling) — the enabling piece for
+        `compat.trackeval` and for numbers matching TrackEval's reported values.
+- [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
+      benchmark (ingest + preprocessing + similarity), added incrementally:
+  - [ ] Box-IoU adapters (DanceTrack, KITTI 2D-box, …) — reuse the existing IoU
+        kernel; each is a bounded, low-risk addition with its own parity test.
+  - [ ] Mask-IoU similarity kernel (KITTI-MOTS, BDD-MOTS, DAVIS) — new Rust core
+        work, not just an adapter; tackle when a mask benchmark is needed.
+  - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
 
 ## License
 

@@ -11,6 +11,14 @@ def version() -> str:
     """Return the version of the compiled Rust core."""
     ...
 
+def is_debug_build() -> bool:
+    """Whether the extension was compiled with debug assertions.
+
+    Debug builds are ~10x slower than release builds; use this to warn before
+    reporting any performance measurement.
+    """
+    ...
+
 def iou(box_a: Bbox, box_b: Bbox) -> float:
     """Intersection-over-union of two ``xyxy`` boxes ``(x1, y1, x2, y2)``."""
     ...

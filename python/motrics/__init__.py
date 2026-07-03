@@ -16,6 +16,7 @@ from motrics._motrics import (
     compute_identity,
     iou,
     iou_matrix,
+    is_debug_build,
     match_boxes,
     version,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "compute_identity",
     "iou",
     "iou_matrix",
+    "is_debug_build",
     "load_motchallenge",
     "match_boxes",
     "version",

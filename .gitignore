@@ -220,3 +220,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Downloaded benchmark data (see benchmarks/download.py).
+benchmarks/data/
