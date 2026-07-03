@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v7
@@ -30,5 +32,8 @@ jobs:
           enable-cache: true
       - run: uv sync --group dev --group parity
       - run: uv run maturin develop --release --uv
-      - run: uv run python benchmarks/download.py --split "${{ inputs.split || 'MOT17-train' }}"
+      # split via env var, not inline interpolation (avoids shell injection)
+      - run: uv run python benchmarks/download.py --split "$SPLIT"
+        env:
+          SPLIT: ${{ inputs.split || 'MOT17-train' }}
       - run: uv run python benchmarks/benchmark.py --repeats 3
