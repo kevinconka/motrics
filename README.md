@@ -105,27 +105,30 @@ See [`benchmarks/README.md`](benchmarks/README.md) for how to run it.
 - [x] HOTA (DetA, AssA, alpha sweep)
 - [x] MOTChallenge ingest + integration tests
 - [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
-- [x] Benchmark & parity infrastructure — parity and the `benchmarks/` suite
-      share one set of sequences and validate motrics against **TrackEval** and
-      **py-motmetrics** (parity in CI). See [`benchmarks/README.md`](benchmarks/README.md).
-  - [x] Speed/parity on **real** MOTChallenge sequences — `benchmarks/download.py`
-        fetches TrackEval's data bundle (MOT17-train); validated in CI and
-        locally. motrics matches TrackEval / py-motmetrics on real data up to
-        Hungarian tie-breaking (a couple of switches out of thousands), and runs
-        ~3–9× faster than TrackEval, ~13–30× faster than py-motmetrics.
-  - [ ] Zero-copy NumPy input path — accepting arrays and sharing one similarity
-        matrix across metrics is the next perf lever.
-- [ ] Adoption & migration (from TrackEval / py-motmetrics) — the benchmark's
-      adapters are working prototypes for these:
-  - [ ] Migration guide + metric-name map (`CLR_TP`↔`num_matches`, …).
-  - [ ] `motrics.compat` drop-in shims — a `MOTAccumulator`-compatible class and a
-        TrackEval `eval_sequence(data)` adapter, so migrators change one import.
-  - [ ] Broaden core inputs — accept precomputed similarity matrices, `xywh`
-        boxes (`box_format=`), and NumPy arrays (folds in the zero-copy item),
-        so users pass what they already hold instead of converting.
-  - [ ] MOTChallenge ingest with TrackEval-parity preprocessing (confidence flag,
-        class/distractor/ignore-region handling) so file-based numbers match
-        TrackEval's reported values.
+- [x] Benchmark & parity infrastructure vs **TrackEval** and **py-motmetrics**,
+      on real MOTChallenge data, validated in CI. See
+      [`benchmarks/README.md`](benchmarks/README.md) for methodology, numbers,
+      and caveats.
+  - [ ] Zero-copy NumPy input path (folds into "broaden core inputs" below).
+- [ ] Replace TrackEval / py-motmetrics, not just benchmark against them:
+  - [ ] Migration guide + metric-name map.
+  - [ ] `motrics.compat.motmetrics` — a drop-in `MOTAccumulator` replacement
+        (small surface, no motmetrics installed).
+  - [ ] `motrics.compat.trackeval` — a drop-in for the MOTChallenge evaluation
+        path (`Evaluator`/dataset/metrics), no TrackEval installed. Gated on
+        TrackEval-parity MOTChallenge preprocessing below.
+  - [ ] Broaden core inputs (precomputed similarity matrices, `xywh` boxes,
+        zero-copy NumPy) so users pass what they already hold.
+  - [ ] MOTChallenge ingest with TrackEval-parity preprocessing (confidence,
+        class/distractor/ignore-region handling) — the enabling piece for
+        `compat.trackeval` and for numbers matching TrackEval's reported values.
+- [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
+      benchmark (ingest + preprocessing + similarity), added incrementally:
+  - [ ] Box-IoU adapters (DanceTrack, KITTI 2D-box, …) — reuse the existing IoU
+        kernel; each is a bounded, low-risk addition with its own parity test.
+  - [ ] Mask-IoU similarity kernel (KITTI-MOTS, BDD-MOTS, DAVIS) — new Rust core
+        work, not just an adapter; tackle when a mask benchmark is needed.
+  - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
 
 ## License
 

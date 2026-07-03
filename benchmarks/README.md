@@ -20,3 +20,16 @@ larger.
 
 Exact numeric parity is also checked on synthetic sequences in
 `tests/test_parity.py` (`fixtures.make_synthetic`), which run offline in CI.
+
+## Notes
+
+- **Tie-breaking, not a bug.** On dense real sequences, Hungarian assignment
+  ties are resolved differently by each solver (`lsap` vs `scipy`), shifting a
+  couple of matches/switches out of thousands (e.g. IDSW 70 vs 72 with
+  identical TP/FP/FN). `benchmark.py` tolerates this (`PARITY_ATOL`);
+  `tests/test_parity.py` still enforces exact 1e-9 parity on tie-free synthetic
+  data, which is the real bug-catching gate.
+- **Measured speedups (MOT17-train, release build):** motrics runs roughly
+  3–9× faster than TrackEval and 13–30× faster than py-motmetrics. Exact ratios
+  vary by sequence density and machine — rerun the benchmark for current numbers
+  rather than trusting these as fixed.
