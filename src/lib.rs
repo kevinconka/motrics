@@ -419,6 +419,24 @@ struct HotaMetrics {
     /// Per-alpha AssA scores, parallel to `alphas`.
     #[pyo3(get)]
     assa_alphas: Vec<f64>,
+    /// Per-alpha LocA scores, parallel to `alphas`.
+    #[pyo3(get)]
+    loca_alphas: Vec<f64>,
+    /// Per-alpha true positive counts, parallel to `alphas`.
+    #[pyo3(get)]
+    hota_tp_alphas: Vec<f64>,
+    /// Per-alpha false negative counts, parallel to `alphas`.
+    #[pyo3(get)]
+    hota_fn_alphas: Vec<f64>,
+    /// Per-alpha false positive counts, parallel to `alphas`.
+    #[pyo3(get)]
+    hota_fp_alphas: Vec<f64>,
+    /// Per-alpha association recall, parallel to `alphas`.
+    #[pyo3(get)]
+    ass_re_alphas: Vec<f64>,
+    /// Per-alpha association precision, parallel to `alphas`.
+    #[pyo3(get)]
+    ass_pr_alphas: Vec<f64>,
     /// Number of frames processed.
     #[pyo3(get)]
     num_frames: usize,
@@ -463,6 +481,12 @@ fn compute_hota(
         hota_alphas: m.hota_alphas,
         deta_alphas: m.deta_alphas,
         assa_alphas: m.assa_alphas,
+        loca_alphas: m.loca_alphas,
+        hota_tp_alphas: m.hota_tp_alphas,
+        hota_fn_alphas: m.hota_fn_alphas,
+        hota_fp_alphas: m.hota_fp_alphas,
+        ass_re_alphas: m.ass_re_alphas,
+        ass_pr_alphas: m.ass_pr_alphas,
         num_frames: m.num_frames,
         num_gt: m.num_gt,
         num_pred: m.num_pred,

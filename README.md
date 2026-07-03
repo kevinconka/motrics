@@ -14,8 +14,8 @@ An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
   py-motmetrics on real MOT17 data.
 - 🎯 **Numerically validated** — exact parity with TrackEval on CLEAR,
   Identity, and HOTA, checked in CI.
-- 🔄 **Drop-in migration** — swap one import to replace py-motmetrics, no
-  other code changes.
+- 🔄 **Drop-in migration** — swap one import to replace py-motmetrics; evaluate
+  a MOTChallenge benchmark without installing TrackEval.
 - 🐍 **Ergonomic, typed Python API** — PEP 561, zero required runtime
   dependencies.
 
@@ -83,6 +83,51 @@ summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="a
 - See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
   for what else differs (e.g. no `events`/`mot_events` DataFrame).
 
+## Migrating from TrackEval
+
+Swap the import — the rest of your evaluation script is unchanged:
+
+```python
+# before
+import trackeval
+
+# after — same code, motrics underneath
+import motrics.compat.trackeval as trackeval
+
+eval_config = trackeval.Evaluator.get_default_eval_config()
+evaluator = trackeval.Evaluator(eval_config)
+
+dataset_config = trackeval.datasets.MotChallenge2DBox.get_default_dataset_config()
+dataset_config["GT_FOLDER"] = "data/gt/mot_challenge/"
+dataset_config["TRACKERS_FOLDER"] = "data/trackers/mot_challenge/"
+dataset_list = [trackeval.datasets.MotChallenge2DBox(dataset_config)]
+
+metrics_list = [trackeval.metrics.HOTA(), trackeval.metrics.CLEAR(), trackeval.metrics.Identity()]
+
+results, messages = evaluator.evaluate(dataset_list, metrics_list)
+print(results["MotChallenge2DBox"]["my_tracker"]["COMBINED_SEQ"]["pedestrian"]["CLEAR"]["MOTA"])
+```
+
+Same class names, config keys, directory/seqmap conventions
+(`GT_FOLDER/BENCHMARK-SPLIT/<seq>/gt/gt.txt`, a seqmap file, per-sequence
+`seqinfo.ini`), and result shape as real TrackEval, no `trackeval`/`scipy`
+install required — but only for the subset below. `HOTA`, `Identity`, and
+`CLEAR`'s `MOTA`/`MOTP` fields are verified bit-exact against real TrackEval;
+unsupported config or fields raise rather than silently returning a wrong
+number.
+
+- `pip install motrics[compat]` (pulls in numpy, needed only for this
+  subpackage — HOTA's per-alpha fields are numpy arrays, matching TrackEval).
+- Not implemented: parallel evaluation, error-handling config
+  (`BREAK_ON_ERROR`/etc. — always raises immediately), printing/file
+  output/plotting; zipped input (`INPUT_AS_ZIP`); `DO_PREPROC=False` and
+  `BENCHMARK="MOT15"` (raise at construction); `CLEAR` fields beyond
+  `MOTA`/`MOTP` (`MT`/`PT`/`ML`/`Frag`/`MODA`/`sMOTA`/etc. need
+  mostly-tracked/lost and fragmentation bookkeeping the Rust core doesn't
+  compute yet); `IDEucl`/`JAndF`/`TrackMAP`/`VACE` metrics.
+- See [`python/motrics/compat/trackeval/`](python/motrics/compat/trackeval/)
+  for the full list of what differs from real TrackEval.
+
 <details>
 <summary>Metric name map — TrackEval / py-motmetrics / motrics' native API</summary>
 
@@ -139,8 +184,11 @@ it yourself.
         removal, pedestrian-only, "do not consider" rows dropped) — validated
         against TrackEval's own `get_preprocessed_seq_data`, and now what the
         real-data benchmark uses. The enabling piece for `compat.trackeval`.
-  - [ ] `motrics.compat.trackeval` — a drop-in for the MOTChallenge evaluation
-        path (`Evaluator`/dataset/metrics), no TrackEval installed.
+  - [x] `motrics.compat.trackeval` — a drop-in for TrackEval's
+        `Evaluator`/`datasets.MotChallenge2DBox`/`metrics.{HOTA,CLEAR,Identity}`
+        (same class names, config keys, and result shape); see above for
+        what's out of scope (parallel eval, full `CLEAR` field set, other
+        metrics).
   - [ ] Broaden core inputs further (`xywh` boxes, zero-copy NumPy) so users
         pass what they already hold.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per

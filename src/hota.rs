@@ -38,6 +38,18 @@ pub struct HotaMetrics {
     pub deta_alphas: Vec<f64>,
     /// Per-alpha AssA scores, parallel to `alphas`.
     pub assa_alphas: Vec<f64>,
+    /// Per-alpha LocA scores, parallel to `alphas`.
+    pub loca_alphas: Vec<f64>,
+    /// Per-alpha true positive counts, parallel to `alphas`.
+    pub hota_tp_alphas: Vec<f64>,
+    /// Per-alpha false negative counts, parallel to `alphas`.
+    pub hota_fn_alphas: Vec<f64>,
+    /// Per-alpha false positive counts, parallel to `alphas`.
+    pub hota_fp_alphas: Vec<f64>,
+    /// Per-alpha association recall, parallel to `alphas`.
+    pub ass_re_alphas: Vec<f64>,
+    /// Per-alpha association precision, parallel to `alphas`.
+    pub ass_pr_alphas: Vec<f64>,
     /// Number of frames processed.
     pub num_frames: usize,
     /// Total ground-truth detections across all frames.
@@ -83,6 +95,12 @@ pub fn compute_hota(frames: &[Frame]) -> HotaMetrics {
         hota_alphas: vec![0.0; n_a],
         deta_alphas: vec![0.0; n_a],
         assa_alphas: vec![0.0; n_a],
+        loca_alphas: vec![0.0; n_a],
+        hota_tp_alphas: vec![0.0; n_a],
+        hota_fn_alphas: vec![0.0; n_a],
+        hota_fp_alphas: vec![0.0; n_a],
+        ass_re_alphas: vec![0.0; n_a],
+        ass_pr_alphas: vec![0.0; n_a],
         ..Default::default()
     };
 
@@ -113,8 +131,18 @@ pub fn compute_hota(frames: &[Frame]) -> HotaMetrics {
     result.num_gt = gt_count.iter().sum::<f64>() as usize;
     result.num_pred = pred_count.iter().sum::<f64>() as usize;
 
-    // No possible true positives -> every score is zero.
-    if n_g == 0 || n_t == 0 {
+    // No possible true positives -> every gt is a miss or every pred is a false
+    // positive (mirrors TrackEval's own early-return special case).
+    if n_t == 0 {
+        result.hota_fn_alphas = vec![result.num_gt as f64; n_a];
+        result.loca_alphas = vec![1.0; n_a];
+        result.loca = 1.0;
+        return result;
+    }
+    if n_g == 0 {
+        result.hota_fp_alphas = vec![result.num_pred as f64; n_a];
+        result.loca_alphas = vec![1.0; n_a];
+        result.loca = 1.0;
         return result;
     }
 
@@ -197,18 +225,24 @@ pub fn compute_hota(frames: &[Frame]) -> HotaMetrics {
             fp[a] += np as f64 - num;
         }
     }
+    result.hota_tp_alphas = tp.clone();
+    result.hota_fn_alphas = fn_.clone();
+    result.hota_fp_alphas = fp.clone();
 
-    // Phase 2: per-alpha DetA, AssA, LocA, HOTA.
-    let mut loca_alphas = vec![0.0f64; n_a];
+    // Phase 2: per-alpha DetA, AssA, AssRe, AssPr, LocA, HOTA.
     for a in 0..n_a {
         let deta = tp[a] / (tp[a] + fn_[a] + fp[a]).max(1.0);
 
         let mut ass_num = 0.0;
+        let mut ass_re_num = 0.0;
+        let mut ass_pr_num = 0.0;
         for g in 0..n_g {
             for t in 0..n_t {
                 let c = matches_counts[a][g][t];
                 if c > 0.0 {
                     ass_num += c * (c / (gt_count[g] + pred_count[t] - c).max(1.0));
+                    ass_re_num += c * (c / gt_count[g].max(1.0));
+                    ass_pr_num += c * (c / pred_count[t].max(1.0));
                 }
             }
         }
@@ -217,15 +251,17 @@ pub fn compute_hota(frames: &[Frame]) -> HotaMetrics {
 
         result.deta_alphas[a] = deta;
         result.assa_alphas[a] = assa;
+        result.ass_re_alphas[a] = ass_re_num / tp[a].max(1.0);
+        result.ass_pr_alphas[a] = ass_pr_num / tp[a].max(1.0);
         result.hota_alphas[a] = (deta * assa).sqrt();
-        loca_alphas[a] = loca;
+        result.loca_alphas[a] = loca;
     }
 
     let n_a_f = n_a as f64;
     result.deta = result.deta_alphas.iter().sum::<f64>() / n_a_f;
     result.assa = result.assa_alphas.iter().sum::<f64>() / n_a_f;
     result.hota = result.hota_alphas.iter().sum::<f64>() / n_a_f;
-    result.loca = loca_alphas.iter().sum::<f64>() / n_a_f;
+    result.loca = result.loca_alphas.iter().sum::<f64>() / n_a_f;
     result
 }
 
@@ -260,6 +296,12 @@ mod tests {
         assert!((m.loca - 1.0).abs() < 1e-9);
         assert_eq!(m.alphas.len(), 19);
         assert_eq!(m.hota_alphas.len(), 19);
+        assert!(m.hota_tp_alphas.iter().all(|&v| v == 2.0));
+        assert!(m.hota_fn_alphas.iter().all(|&v| v == 0.0));
+        assert!(m.hota_fp_alphas.iter().all(|&v| v == 0.0));
+        assert!(m.ass_re_alphas.iter().all(|&v| (v - 1.0).abs() < 1e-9));
+        assert!(m.ass_pr_alphas.iter().all(|&v| (v - 1.0).abs() < 1e-9));
+        assert!(m.loca_alphas.iter().all(|&v| (v - 1.0).abs() < 1e-9));
     }
 
     #[test]
@@ -277,6 +319,10 @@ mod tests {
         assert!((m.assa - 0.5).abs() < 1e-9, "assa={}", m.assa);
         assert!((m.hota - 0.5f64.sqrt()).abs() < 1e-9, "hota={}", m.hota);
         assert!((m.loca - 1.0).abs() < 1e-9);
+        // 4 detections total, split 2/2 across two predicted ids.
+        assert!(m.hota_tp_alphas.iter().all(|&v| v == 4.0));
+        assert!(m.ass_re_alphas.iter().all(|&v| (v - 0.5).abs() < 1e-9));
+        assert!(m.ass_pr_alphas.iter().all(|&v| (v - 1.0).abs() < 1e-9));
     }
 
     #[test]
@@ -286,6 +332,9 @@ mod tests {
         assert_eq!(m.hota, 0.0);
         assert_eq!(m.num_pred, 1);
         assert_eq!(m.num_gt, 0);
+        assert!(m.hota_fp_alphas.iter().all(|&v| v == 1.0));
+        assert!(m.loca_alphas.iter().all(|&v| v == 1.0));
+        assert_eq!(m.loca, 1.0);
     }
 
     #[test]
@@ -294,6 +343,9 @@ mod tests {
         let m = compute_hota(&frames);
         assert_eq!(m.hota, 0.0);
         assert_eq!(m.num_gt, 1);
+        assert!(m.hota_fn_alphas.iter().all(|&v| v == 1.0));
+        assert!(m.loca_alphas.iter().all(|&v| v == 1.0));
+        assert_eq!(m.loca, 1.0);
     }
 
     #[test]

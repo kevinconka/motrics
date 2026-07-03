@@ -235,6 +235,30 @@ class HotaMetrics:
         """Per-alpha AssA scores, parallel to ``alphas``."""
 
     @property
+    def loca_alphas(self) -> list[float]:
+        """Per-alpha LocA scores, parallel to ``alphas``."""
+
+    @property
+    def hota_tp_alphas(self) -> list[float]:
+        """Per-alpha true positive counts, parallel to ``alphas``."""
+
+    @property
+    def hota_fn_alphas(self) -> list[float]:
+        """Per-alpha false negative counts, parallel to ``alphas``."""
+
+    @property
+    def hota_fp_alphas(self) -> list[float]:
+        """Per-alpha false positive counts, parallel to ``alphas``."""
+
+    @property
+    def ass_re_alphas(self) -> list[float]:
+        """Per-alpha association recall, parallel to ``alphas``."""
+
+    @property
+    def ass_pr_alphas(self) -> list[float]:
+        """Per-alpha association precision, parallel to ``alphas``."""
+
+    @property
     def num_frames(self) -> int:
         """Number of frames processed."""
 
