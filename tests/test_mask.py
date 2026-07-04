@@ -87,6 +87,33 @@ def test_mask_iou_matrix_iscrowd_length_mismatch_raises() -> None:
         motrics.mask_iou_matrix(a, b, iscrowd=[False])
 
 
+def test_mask_new_rejects_counts_not_covering_the_mask_area() -> None:
+    # Regression: counts that don't sum to h * w used to reach `mask_iou`
+    # unvalidated and hang forever in its lockstep intersection walk.
+    with pytest.raises(ValueError, match="RLE counts cover"):
+        motrics.Mask((10, 1), [5])
+
+
+def test_mask_iou_rejects_malformed_dict_instead_of_hanging() -> None:
+    malformed: motrics._motrics.RleDict = {"size": [10, 1], "counts": [5]}
+    valid: motrics._motrics.RleDict = {"size": [10, 1], "counts": [0, 10]}
+    with pytest.raises(ValueError, match="RLE counts cover"):
+        motrics.mask_iou(malformed, valid)
+
+
+@pytest.mark.parametrize(
+    ("counts", "match"),
+    [
+        ("!", "invalid byte"),  # outside the valid packed-value alphabet
+        ("o" * 20, "oversized run-length group"),  # never sets the stop bit
+        ("5", "RLE counts cover"),  # decodes fine but under-covers h * w
+    ],
+)
+def test_mask_from_coco_rejects_malformed_strings(counts: str, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        motrics.Mask.from_coco((10, 1), counts)
+
+
 @pytest.mark.parametrize("shape", [(1, 1), (5, 5), (17, 9), (64, 48), (100, 137)])
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_mask_matches_pycocotools(shape: tuple[int, int], seed: int) -> None:

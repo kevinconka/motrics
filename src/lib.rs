@@ -182,14 +182,10 @@ impl Mask {
     /// string — use [`Mask.from_coco`] for that).
     #[new]
     #[pyo3(signature = (size, counts))]
-    fn new(size: [usize; 2], counts: Vec<u32>) -> Self {
-        Mask {
-            rle: mask::Rle {
-                h: size[0],
-                w: size[1],
-                counts,
-            },
-        }
+    fn new(size: [usize; 2], counts: Vec<u32>) -> PyResult<Self> {
+        Ok(Mask {
+            rle: mask::Rle::new(size[0], size[1], counts).map_err(PyValueError::new_err)?,
+        })
     }
 
     /// Decode pycocotools' compressed-string RLE form (`str` or `bytes`).
@@ -202,12 +198,12 @@ impl Mask {
 
     #[getter]
     fn size(&self) -> (usize, usize) {
-        (self.rle.h, self.rle.w)
+        (self.rle.h(), self.rle.w())
     }
 
     #[getter]
     fn counts(&self) -> Vec<u32> {
-        self.rle.counts.clone()
+        self.rle.counts().to_vec()
     }
 
     /// Foreground pixel count.
@@ -223,8 +219,8 @@ impl Mask {
     fn __repr__(&self) -> String {
         format!(
             "Mask(size=({}, {}), area={})",
-            self.rle.h,
-            self.rle.w,
+            self.rle.h(),
+            self.rle.w(),
             self.rle.area()
         )
     }
@@ -242,7 +238,7 @@ fn rle_from_coco_counts(h: usize, w: usize, counts: &Bound<'_, PyAny>) -> PyResu
         return mask::Rle::from_compressed(h, w, &s).map_err(PyValueError::new_err);
     }
     let counts: Vec<u32> = counts.extract()?;
-    Ok(mask::Rle { h, w, counts })
+    mask::Rle::new(h, w, counts).map_err(PyValueError::new_err)
 }
 
 /// Accept a [`Mask`] instance or a pycocotools-style dict
@@ -299,10 +295,10 @@ fn mask_iou_matrix(
 fn mask_decode(mask: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<u32>>> {
     let rle = extract_rle(mask)?;
     let dense = rle.to_dense();
-    Ok((0..rle.h)
+    Ok((0..rle.h())
         .map(|r| {
-            (0..rle.w)
-                .map(|c| u32::from(dense[c * rle.h + r]))
+            (0..rle.w())
+                .map(|c| u32::from(dense[c * rle.h() + r]))
                 .collect()
         })
         .collect())

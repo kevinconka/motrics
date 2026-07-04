@@ -17,14 +17,43 @@
 /// A run-length-encoded binary mask: `counts` are alternating background/
 /// foreground run lengths (always starting with a background run, which may
 /// be `0`), covering `h * w` pixels in column-major order.
+///
+/// Fields are private and every public constructor validates that `counts`
+/// covers exactly `h * w` pixels: [`iou`]'s lockstep walk assumes this and
+/// never terminates otherwise (see [`Rle::new`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rle {
-    pub h: usize,
-    pub w: usize,
-    pub counts: Vec<u32>,
+    h: usize,
+    w: usize,
+    counts: Vec<u32>,
 }
 
 impl Rle {
+    /// Build an [`Rle`] from already-decoded run lengths, checking that they
+    /// cover exactly `h * w` pixels.
+    pub fn new(h: usize, w: usize, counts: Vec<u32>) -> Result<Rle, String> {
+        let total: u64 = counts.iter().map(|&c| u64::from(c)).sum();
+        let expected = (h as u64) * (w as u64);
+        if total != expected {
+            return Err(format!(
+                "RLE counts cover {total} pixels, expected {expected} ({h} * {w})"
+            ));
+        }
+        Ok(Rle { h, w, counts })
+    }
+
+    pub fn h(&self) -> usize {
+        self.h
+    }
+
+    pub fn w(&self) -> usize {
+        self.w
+    }
+
+    pub fn counts(&self) -> &[u32] {
+        &self.counts
+    }
+
     /// Total foreground pixel count: the sum of the odd-indexed (1st, 3rd, ...)
     /// runs, since runs always alternate starting with background.
     pub fn area(&self) -> u64 {
@@ -70,7 +99,18 @@ impl Rle {
     /// Decode pycocotools' compressed-string RLE form: each run length is a
     /// delta from the run two positions back (0 for the first two runs),
     /// packed 5 bits at a time with a continuation bit, ASCII-shifted by 48.
+    ///
+    /// Rejects anything a valid pycocotools encoder could never produce
+    /// (a byte outside the packed-value alphabet, a group long enough to
+    /// overflow the `i64` accumulator's shift, or a decoded run length
+    /// outside `u32`) with a clean error rather than panicking or silently
+    /// truncating — `s` is untrusted external input (a Python `str`/`bytes`).
     pub fn from_compressed(h: usize, w: usize, s: &str) -> Result<Rle, String> {
+        // 13 groups of 5 bits comfortably covers any real u32 delta (up to
+        // ~8 groups) while keeping every shift amount (5 * k) well under
+        // i64's 64-bit width.
+        const MAX_GROUPS_PER_RUN: u32 = 13;
+
         let bytes = s.as_bytes();
         let mut counts: Vec<u32> = Vec::new();
         let mut p = 0usize;
@@ -81,7 +121,14 @@ impl Rle {
                 if p >= bytes.len() {
                     return Err("truncated RLE counts string".to_string());
                 }
-                let c = i64::from(bytes[p]) - 48;
+                if k >= MAX_GROUPS_PER_RUN {
+                    return Err("RLE counts string has an oversized run-length group".to_string());
+                }
+                let byte = bytes[p];
+                if !(48..=111).contains(&byte) {
+                    return Err(format!("invalid byte {byte:#04x} in RLE counts string"));
+                }
+                let c = i64::from(byte) - 48;
                 x |= (c & 0x1f) << (5 * k);
                 let more = c & 0x20 != 0;
                 p += 1;
@@ -96,12 +143,14 @@ impl Rle {
             if counts.len() > 2 {
                 x += i64::from(counts[counts.len() - 2]);
             }
-            if x < 0 {
-                return Err("RLE counts string decodes to a negative run length".to_string());
+            if !(0..=i64::from(u32::MAX)).contains(&x) {
+                return Err(format!(
+                    "RLE counts string decodes to an out-of-range run length ({x})"
+                ));
             }
             counts.push(x as u32);
         }
-        Ok(Rle { h, w, counts })
+        Rle::new(h, w, counts)
     }
 
     /// Encode to pycocotools' compressed-string RLE form (the inverse of
@@ -347,5 +396,46 @@ mod tests {
         assert_eq!(m[0].len(), 2);
         approx(m[0][0], 1.0);
         approx(m[0][1], 1.0); // crowd column: inter=2 / area(a)=2
+    }
+
+    // Regression: counts that don't cover exactly h * w used to reach `iou`
+    // unchecked, and its lockstep walk never terminates once the shorter
+    // side is exhausted while the other still has pixels left (see the PR
+    // discussion). `Rle::new` — the only public way to build an `Rle` from
+    // raw counts — now rejects this before it can reach `iou` at all.
+    #[test]
+    fn new_rejects_undersized_counts() {
+        assert!(Rle::new(10, 1, vec![5]).is_err());
+    }
+
+    #[test]
+    fn new_rejects_oversized_counts() {
+        assert!(Rle::new(2, 2, vec![0, 100]).is_err());
+    }
+
+    #[test]
+    fn new_accepts_exact_coverage() {
+        assert!(Rle::new(2, 2, vec![0, 4]).is_ok());
+    }
+
+    #[test]
+    fn from_compressed_rejects_invalid_byte() {
+        // '!' (0x21) is outside the valid 48..=111 packed-value alphabet.
+        assert!(Rle::from_compressed(2, 2, "!").is_err());
+    }
+
+    #[test]
+    fn from_compressed_rejects_oversized_run_length_group() {
+        // A run of 20 continuation-flagged bytes never terminates within
+        // MAX_GROUPS_PER_RUN and must error, not shift-overflow-panic.
+        let malformed = "o".repeat(20); // 'o' - 48 = 0x2f, continuation bit set
+        assert!(Rle::from_compressed(2, 2, &malformed).is_err());
+    }
+
+    #[test]
+    fn from_compressed_rejects_truncated_coverage() {
+        // A syntactically valid but short compressed string (decodes fine,
+        // just doesn't cover h * w) must be rejected too.
+        assert!(Rle::from_compressed(10, 1, "5").is_err());
     }
 }
