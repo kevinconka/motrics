@@ -228,8 +228,17 @@ it yourself.
         thresholds, min-height and `DontCare`-region filtering for unmatched
         predictions), validated against TrackEval's own
         `get_preprocessed_seq_data`.
-  - [ ] Mask-IoU similarity kernel (KITTI-MOTS, BDD-MOTS, DAVIS) — new Rust core
-        work, not just an adapter; tackle when a mask benchmark is needed.
+  - [x] Mask-IoU similarity kernel (KITTI-MOTS, BDD-MOTS, DAVIS) — `Mask`,
+        `mask_iou`/`mask_iou_matrix`/`mask_area`/`mask_decode`/`mask_encode`,
+        a from-scratch Rust port of pycocotools' RLE codec and direct
+        run-based intersection/union sweep (no dense-array decode), including
+        the `iscrowd`/IoA semantics TrackEval's mask datasets use. Accepts
+        pycocotools' own RLE dicts directly (`{"size": [h, w], "counts":
+        ...}`, compressed `str`/`bytes` or already-decoded run lengths — no
+        `pycocotools` install required), validated byte-for-byte and
+        numerically against a real `pycocotools` build. The dataset adapters
+        themselves (KITTI-MOTS/BDD-MOTS/DAVIS ingest) are separate, future
+        work — this is the similarity kernel they'll need.
   - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
 
 </details>

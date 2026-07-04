@@ -57,10 +57,13 @@ dev = [
     "ty>=0.0.1a1",
 ]
 # Reference evaluators for parity + benchmarking (scipy comes in transitively).
+# pycocotools also arrives transitively via trackeval, but is declared directly
+# since motrics' own mask RLE codec is validated against its output.
 parity = [
     "numpy>=2.2.6",
     "trackeval>=1.3.0",
     "motmetrics>=1.4.0",
+    "pycocotools>=2.0.7",
 ]
 
 [tool.pytest.ini_options]
