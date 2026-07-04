@@ -25,6 +25,7 @@ from motrics._motrics import (
     version,
 )
 from motrics.frames import Frames, evaluate
+from motrics.kitti import load_kitti, load_kitti_gt, preprocess_kitti
 from motrics.motchallenge import (
     align_frames,
     load_motchallenge,
@@ -51,9 +52,12 @@ __all__ = [
     "iou",
     "iou_matrix",
     "is_debug_build",
+    "load_kitti",
+    "load_kitti_gt",
     "load_motchallenge",
     "load_motchallenge_gt",
     "match_boxes",
+    "preprocess_kitti",
     "preprocess_motchallenge",
     "version",
 ]

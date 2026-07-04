@@ -20,6 +20,7 @@ from __future__ import annotations
 import configparser
 import csv
 import os
+from pathlib import Path
 from typing import Any
 
 from motrics import load_motchallenge, load_motchallenge_gt, preprocess_motchallenge
@@ -91,7 +92,9 @@ class MotChallenge2DBox:
                 raise TrackEvalException(f"GT file not found for sequence: {seq}")
 
         if self.config["TRACKERS_TO_EVAL"] is None:
-            self.tracker_list = os.listdir(self.tracker_fol)
+            # Sorted (unlike TrackEval's own `os.listdir`, which is
+            # filesystem-order-dependent) so results are reproducible.
+            self.tracker_list = sorted(p.name for p in Path(self.tracker_fol).iterdir())
         else:
             self.tracker_list = self.config["TRACKERS_TO_EVAL"]
 

@@ -22,6 +22,9 @@ from motrics._motrics import EvaluationResult
 from motrics._motrics import evaluate as _evaluate
 
 # A bounding box: 4 floats, in whichever convention `box_format` specifies.
+# Deliberately looser than `motrics._types.Bbox` (a fixed xyxy 4-tuple): this
+# one accepts anything sequence-like, including a NumPy array row, since it
+# describes permissive user input rather than an already-parsed box.
 Bbox = Sequence[float]
 # One frame's boxes: a sequence of 4-tuples, or a zero-copy `(N, 4)` float64
 # NumPy array (zero-copy only for a contiguous array in `"xyxy"` format).
