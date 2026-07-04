@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import motrics
+from motrics._types import Bbox
 
 REAL_DIR = Path(__file__).parent / "data" / "real"
-Bbox = tuple[float, float, float, float]
 
 
 @dataclass(frozen=True)

@@ -84,7 +84,7 @@ def _motrics_result(
     _write_rows(pred_path, PRED_ROWS)
     gt, ignore = motrics.load_kitti_gt(gt_path)
     pred = motrics.load_kitti(pred_path)
-    return motrics.preprocess_kitti(gt, ignore, pred, "pedestrian")
+    return motrics.preprocess_kitti(gt, pred, "pedestrian", ignore_regions=ignore)
 
 
 def _trackeval_result() -> dict[str, Any]:

@@ -59,7 +59,7 @@ def test_load_kitti_gt_reads_truncation_and_occlusion(tmp_path: Path) -> None:
 
 def test_preprocess_kitti_rejects_unknown_class() -> None:
     with pytest.raises(ValueError, match="unknown class"):
-        motrics.preprocess_kitti({}, {}, {}, "bicycle")
+        motrics.preprocess_kitti({}, {}, "bicycle")
 
 
 def test_preprocess_kitti_drops_pred_matched_to_distractor() -> None:
@@ -80,7 +80,7 @@ def test_preprocess_kitti_drops_pred_matched_to_distractor() -> None:
         )
     }
     gt_ids, _gt_boxes, pred_ids, _pred_boxes = motrics.preprocess_kitti(
-        gt, {}, pred, "pedestrian"
+        gt, pred, "pedestrian"
     )
     assert gt_ids == [[1]]  # distractor (2) dropped
     assert pred_ids == [[10]]  # pred matched to the distractor (20) dropped
@@ -102,7 +102,7 @@ def test_preprocess_kitti_drops_occluded_and_truncated_gt() -> None:
     }
     pred = {1: ([], [], [])}
     gt_ids, _gt_boxes, _pred_ids, _pred_boxes = motrics.preprocess_kitti(
-        gt, {}, pred, "pedestrian"
+        gt, pred, "pedestrian"
     )
     assert gt_ids == [[1]]
 
@@ -110,7 +110,7 @@ def test_preprocess_kitti_drops_occluded_and_truncated_gt() -> None:
 def test_preprocess_kitti_drops_short_unmatched_pred() -> None:
     pred = {1: ([10], [(0.0, 0.0, 10.0, 20.0)], [4])}  # height 20 <= min_height 25
     _gt_ids, _gt_boxes, pred_ids, _pred_boxes = motrics.preprocess_kitti(
-        {}, {}, pred, "pedestrian"
+        {}, pred, "pedestrian"
     )
     assert pred_ids == [[]]
 
@@ -119,7 +119,7 @@ def test_preprocess_kitti_drops_pred_inside_ignore_region() -> None:
     pred = {1: ([10], [(2.0, 2.0, 18.0, 28.0)], [4])}  # height 26, inside region
     ignore = {1: [(0.0, 0.0, 20.0, 30.0)]}
     _gt_ids, _gt_boxes, pred_ids, _pred_boxes = motrics.preprocess_kitti(
-        {}, ignore, pred, "pedestrian"
+        {}, pred, "pedestrian", ignore_regions=ignore
     )
     assert pred_ids == [[]]
 
@@ -127,7 +127,7 @@ def test_preprocess_kitti_drops_pred_inside_ignore_region() -> None:
 def test_preprocess_kitti_keeps_real_false_positive() -> None:
     pred = {1: ([10], [(0.0, 0.0, 10.0, 30.0)], [4])}  # height 30, no gt, no ignore
     _gt_ids, _gt_boxes, pred_ids, _pred_boxes = motrics.preprocess_kitti(
-        {}, {}, pred, "pedestrian"
+        {}, pred, "pedestrian"
     )
     assert pred_ids == [[10]]
 
@@ -136,7 +136,7 @@ def test_preprocess_kitti_excludes_other_classes() -> None:
     gt = {1: ([1], [(0.0, 0.0, 10.0, 10.0)], [1], [0], [0])}  # car, irrelevant here
     pred = {1: ([10], [(0.0, 0.0, 10.0, 10.0)], [1])}
     gt_ids, _gt_boxes, pred_ids, _pred_boxes = motrics.preprocess_kitti(
-        gt, {}, pred, "pedestrian"
+        gt, pred, "pedestrian"
     )
     assert gt_ids == [[]]
     assert pred_ids == [[]]
@@ -146,7 +146,7 @@ def test_end_to_end_perfect_sequence(tmp_path: Path) -> None:
     # Identical gt and prediction -> perfect scores across every metric.
     gt, ignore = motrics.load_kitti_gt(_write(tmp_path, "gt.txt", GT_TEXT))
     pred = motrics.load_kitti(_write(tmp_path, "res.txt", GT_TEXT))
-    args = motrics.preprocess_kitti(gt, ignore, pred, "pedestrian")
+    args = motrics.preprocess_kitti(gt, pred, "pedestrian", ignore_regions=ignore)
 
     clear = motrics.compute_clear(*args)
     identity = motrics.compute_identity(*args)

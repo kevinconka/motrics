@@ -23,9 +23,8 @@ from __future__ import annotations
 from os import PathLike
 
 from motrics._motrics import match_boxes
+from motrics._types import Bbox
 
-# A bounding box in xyxy format: (x1, y1, x2, y2).
-Bbox = tuple[float, float, float, float]
 # Per-frame tracker detections: frame number -> (ids, boxes, class ids).
 _ByFrame = dict[int, tuple[list[int], list[Bbox], list[int]]]
 # Per-frame ground truth with the extra columns preprocessing needs:
@@ -135,10 +134,10 @@ def _ioa(box: Bbox, region: Bbox) -> float:
 
 def preprocess_kitti(
     gt: _GtByFrame,
-    ignore_regions: _IgnoreByFrame,
     pred: _ByFrame,
     cls: str,
     *,
+    ignore_regions: _IgnoreByFrame | None = None,
     iou_threshold: float = 0.5,
 ) -> tuple[list[list[int]], list[list[Bbox]], list[list[int]], list[list[Bbox]]]:
     """Align and filter ground truth/predictions exactly as TrackEval's
@@ -155,9 +154,9 @@ def preprocess_kitti(
     Args:
         gt: Ground truth from :func:`load_kitti_gt` (unfiltered — every class
             and occlusion/truncation level must still be present).
-        ignore_regions: "DontCare" regions from :func:`load_kitti_gt`.
         pred: Predictions from :func:`load_kitti`.
         cls: Class to evaluate, ``"pedestrian"`` or ``"car"``.
+        ignore_regions: "DontCare" regions from :func:`load_kitti_gt`, if any.
         iou_threshold: Threshold for the gt/prediction match.
 
     Returns:
@@ -168,6 +167,7 @@ def preprocess_kitti(
         raise ValueError(f'unknown class {cls!r}, expected "pedestrian" or "car"')
     cls_id = _CLASS_NAME_TO_ID[cls]
     distractor_id = _CLASS_NAME_TO_ID[_DISTRACTOR_FOR[cls]]
+    ignore_regions = ignore_regions or {}
 
     gt_ids: list[list[int]] = []
     gt_boxes: list[list[Bbox]] = []

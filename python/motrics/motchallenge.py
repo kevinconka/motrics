@@ -26,9 +26,8 @@ from __future__ import annotations
 from os import PathLike
 
 from motrics._motrics import match_boxes
+from motrics._types import Bbox
 
-# A bounding box in xyxy format: (x1, y1, x2, y2).
-Bbox = tuple[float, float, float, float]
 # Per-frame detections: frame number -> (object ids, boxes).
 _ByFrame = dict[int, tuple[list[int], list[Bbox]]]
 # Per-frame ground truth with the extra columns preprocessing needs:
