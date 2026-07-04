@@ -66,7 +66,7 @@ def test_preprocess_kitti_drops_pred_matched_to_distractor() -> None:
     gt = {
         1: (
             [1, 2],
-            [(0.0, 0.0, 10.0, 10.0), (20.0, 20.0, 10.0, 10.0)],
+            [(0.0, 0.0, 10.0, 10.0), (20.0, 20.0, 30.0, 30.0)],
             [4, 5],  # pedestrian, person (distractor for pedestrian)
             [0, 0],
             [0, 0],
@@ -75,7 +75,7 @@ def test_preprocess_kitti_drops_pred_matched_to_distractor() -> None:
     pred = {
         1: (
             [10, 20],
-            [(0.0, 0.0, 10.0, 10.0), (20.0, 20.0, 10.0, 10.0)],
+            [(0.0, 0.0, 10.0, 10.0), (20.0, 20.0, 30.0, 30.0)],
             [4, 4],
         )
     }
