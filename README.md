@@ -222,8 +222,12 @@ it yourself.
         DanceTrack-specific preprocessing branch. `load_motchallenge_gt` +
         `preprocess_motchallenge` already handle it — confirmed by a
         round-trip test against TrackEval's real preprocessing and metrics.
-  - [ ] KITTI 2D-box — genuinely different format (space-separated, `DontCare`
-        class, 3D fields even for the 2D-box challenge); needs a real parser.
+  - [x] KITTI 2D-box — `load_kitti`/`load_kitti_gt` + `preprocess_kitti`
+        replicate TrackEval's `Kitti2DBox` preprocessing (per-class
+        evaluation, `person`/`van` distractors, occlusion/truncation
+        thresholds, min-height and `DontCare`-region filtering for unmatched
+        predictions), validated against TrackEval's own
+        `get_preprocessed_seq_data`.
   - [ ] Mask-IoU similarity kernel (KITTI-MOTS, BDD-MOTS, DAVIS) — new Rust core
         work, not just an adapter; tackle when a mask benchmark is needed.
   - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
