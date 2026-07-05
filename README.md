@@ -157,6 +157,15 @@ per-frame Python bookkeeping)? Here's how the field names line up:
 
 On real MOT17 data, release build, end-to-end from raw boxes:
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="benchmarks/assets/speedup-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="benchmarks/assets/speedup-light.png">
+    <img alt="Bar chart: motrics computes CLEAR+Identity+HOTA in 770ms vs TrackEval's 5930ms (7.7x faster), and CLEAR+Identity in 443ms vs py-motmetrics' 6211ms (14.0x faster)." src="benchmarks/assets/speedup-light.png">
+  </picture>
+</p>
+<p align="center"><i>Wall time summed over every MOT17-train sequence, from a live CI run.</i></p>
+
 | motrics vs…   | Metrics                | Speedup |
 | ------------- | ----------------------- | ------- |
 | TrackEval     | CLEAR + Identity + HOTA | ~7–9×   |

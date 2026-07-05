@@ -32,6 +32,18 @@ a rough signal rather than a precise regression check. `--markdown PATH`
 writes the same report `benchmark.py` prints to stdout as a markdown file for
 that comment.
 
+## Chart
+
+The bar chart in the top-level README (`benchmarks/assets/speedup-*.png`) is
+generated from `plot_speedup.py`, not measured at doc-build time. After a
+benchmark run shows the numbers have meaningfully drifted, update `DATA` in
+that script and regenerate:
+
+```bash
+uv sync --group plot
+uv run python benchmarks/plot_speedup.py
+```
+
 ## Notes
 
 - **Ground truth is preprocessed.** `fixtures.load_real()` runs gt.txt through
