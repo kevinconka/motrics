@@ -66,6 +66,8 @@ parity = [
     "motmetrics>=1.4.0",
     "pycocotools>=2.0.7",
 ]
+# For regenerating the README benchmark chart (benchmarks/plot_speedup.py).
+plot = ["matplotlib>=3.8"]
 
 [tool.pytest.ini_options]
 # Let tests import the shared benchmark fixtures (benchmarks.fixtures).
