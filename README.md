@@ -257,9 +257,22 @@ it yourself.
         [h, w], "counts": ...}`, compressed `str`/`bytes` or already-decoded
         run lengths — no `pycocotools` install required), validated
         byte-for-byte and numerically against a real `pycocotools` build.
-        The dataset adapters themselves (KITTI-MOTS/BDD-MOTS/DAVIS ingest)
-        are separate, future work — this is the similarity kernel (plus the
-        two extra primitives those adapters specifically need) they'll use.
+        This is the similarity kernel (plus the two extra primitives those
+        adapters specifically need) the mask-based dataset adapters below
+        build on.
+  - [x] KITTI-MOTS — `load_kitti_mots`/`load_kitti_mots_gt` +
+        `preprocess_kitti_mots` replicate TrackEval's `KittiMOTS`
+        preprocessing (per-class evaluation, gt/prediction matching by mask
+        IoU, ignore-region-covered unmatched predictions dropped — no
+        distractor classes or occlusion/truncation thresholds here, unlike
+        KITTI 2D-box), validated against TrackEval's own
+        `get_preprocessed_seq_data`. Since there's no core `compute_*` mask
+        overload, preprocessing returns ids plus a precomputed similarity
+        matrix for the `compute_*_from_similarity` functions. Also adds
+        `match_masks`, a mask-IoU sibling to `match_boxes` sharing the same
+        Hungarian/greedy assignment core.
+  - [ ] BDD-MOTS / DAVIS — same mask kernel, different dataset-specific
+        preprocessing rules.
   - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
 
 </details>

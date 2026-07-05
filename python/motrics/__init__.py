@@ -30,10 +30,16 @@ from motrics._motrics import (
     mask_merge,
     mask_to_bbox,
     match_boxes,
+    match_masks,
     version,
 )
 from motrics.frames import Frames, evaluate
 from motrics.kitti import load_kitti, load_kitti_gt, preprocess_kitti
+from motrics.kitti_mots import (
+    load_kitti_mots,
+    load_kitti_mots_gt,
+    preprocess_kitti_mots,
+)
 from motrics.motchallenge import (
     align_frames,
     load_motchallenge,
@@ -63,6 +69,8 @@ __all__ = [
     "is_debug_build",
     "load_kitti",
     "load_kitti_gt",
+    "load_kitti_mots",
+    "load_kitti_mots_gt",
     "load_motchallenge",
     "load_motchallenge_gt",
     "mask_area",
@@ -73,7 +81,9 @@ __all__ = [
     "mask_merge",
     "mask_to_bbox",
     "match_boxes",
+    "match_masks",
     "preprocess_kitti",
+    "preprocess_kitti_mots",
     "preprocess_motchallenge",
     "version",
 ]

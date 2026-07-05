@@ -135,7 +135,7 @@ def mask_to_bbox(
     ...
 
 class Matching:
-    """The result of matching two sets of boxes."""
+    """The result of matching two sets of boxes or masks."""
 
     @property
     def matches(self) -> list[tuple[int, int]]:
@@ -147,11 +147,11 @@ class Matching:
 
     @property
     def unmatched_a(self) -> list[int]:
-        """Indices of ``boxes_a`` that were not matched."""
+        """Indices of set A that were not matched."""
 
     @property
     def unmatched_b(self) -> list[int]:
-        """Indices of ``boxes_b`` that were not matched."""
+        """Indices of set B that were not matched."""
 
     def __repr__(self) -> str: ...
 
@@ -167,6 +167,17 @@ def match_boxes(
     ``method`` is ``"hungarian"`` (optimal, maximises total IoU) or ``"greedy"``
     (assign highest-IoU pairs first). Only pairs with IoU at or above
     ``iou_threshold`` are kept.
+    """
+    ...
+
+def match_masks(
+    masks_a: Sequence[MaskLike],
+    masks_b: Sequence[MaskLike],
+    iou_threshold: float = 0.5,
+    method: str = "hungarian",
+) -> Matching:
+    """Match two sets of masks, mirroring :func:`match_boxes` for segmentation
+    masks.
     """
     ...
 

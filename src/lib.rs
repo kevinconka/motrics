@@ -384,6 +384,28 @@ impl Matching {
     }
 }
 
+impl From<assignment::MatchResult> for Matching {
+    fn from(result: assignment::MatchResult) -> Self {
+        Matching {
+            matches: result.matches,
+            scores: result.scores,
+            unmatched_a: result.unmatched_a,
+            unmatched_b: result.unmatched_b,
+        }
+    }
+}
+
+/// Parse a `method` argument shared by `match_boxes` and `match_masks`.
+fn parse_method(method: &str) -> PyResult<Method> {
+    match method {
+        "hungarian" => Ok(Method::Hungarian),
+        "greedy" => Ok(Method::Greedy),
+        other => Err(PyValueError::new_err(format!(
+            "unknown method {other:?}, expected \"hungarian\" or \"greedy\""
+        ))),
+    }
+}
+
 /// Match two sets of boxes.
 ///
 /// `method` is either `"hungarian"` (optimal, maximises total IoU) or
@@ -398,15 +420,7 @@ fn match_boxes(
     method: &str,
     box_format: &str,
 ) -> PyResult<Matching> {
-    let method = match method {
-        "hungarian" => Method::Hungarian,
-        "greedy" => Method::Greedy,
-        other => {
-            return Err(PyValueError::new_err(format!(
-                "unknown method {other:?}, expected \"hungarian\" or \"greedy\""
-            )))
-        }
-    };
+    let method = parse_method(method)?;
     let format = BoxFormat::parse(box_format)?;
     let boxes_a = boxes_a.as_boxes(format)?;
     let boxes_b = boxes_b.as_boxes(format)?;
@@ -416,12 +430,32 @@ fn match_boxes(
     let matrix = iou::iou_matrix(&boxes_a, &boxes_b);
     let result = assignment::match_boxes(&matrix, n_a, n_b, iou_threshold, method);
 
-    Ok(Matching {
-        matches: result.matches,
-        scores: result.scores,
-        unmatched_a: result.unmatched_a,
-        unmatched_b: result.unmatched_b,
-    })
+    Ok(result.into())
+}
+
+/// Match two sets of masks, mirroring [`match_boxes`] for segmentation masks.
+///
+/// `method` is either `"hungarian"` (optimal, maximises total IoU) or
+/// `"greedy"` (assign highest-IoU pairs first). Only pairs with IoU at or
+/// above `iou_threshold` are kept.
+#[pyfunction]
+#[pyo3(signature = (masks_a, masks_b, iou_threshold=0.5, method="hungarian"))]
+fn match_masks(
+    masks_a: Vec<Bound<'_, PyAny>>,
+    masks_b: Vec<Bound<'_, PyAny>>,
+    iou_threshold: f64,
+    method: &str,
+) -> PyResult<Matching> {
+    let method = parse_method(method)?;
+    let a: Vec<mask::Rle> = masks_a.iter().map(extract_rle).collect::<PyResult<_>>()?;
+    let b: Vec<mask::Rle> = masks_b.iter().map(extract_rle).collect::<PyResult<_>>()?;
+
+    let n_a = a.len();
+    let n_b = b.len();
+    let matrix = mask::iou_matrix(&a, &b, None).map_err(PyValueError::new_err)?;
+    let result = assignment::match_boxes(&matrix, n_a, n_b, iou_threshold, method);
+
+    Ok(result.into())
 }
 
 /// Accumulated CLEAR MOT metrics over a sequence.
@@ -839,6 +873,7 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(iou_py, m)?)?;
     m.add_function(wrap_pyfunction!(iou_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(match_boxes, m)?)?;
+    m.add_function(wrap_pyfunction!(match_masks, m)?)?;
     m.add_function(wrap_pyfunction!(mask_area, m)?)?;
     m.add_function(wrap_pyfunction!(mask_iou, m)?)?;
     m.add_function(wrap_pyfunction!(mask_iou_matrix, m)?)?;
