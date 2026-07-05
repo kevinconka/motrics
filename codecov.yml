@@ -1,0 +1,22 @@
+coverage:
+  status:
+    project:
+      default: false
+      rust:
+        flags: [rust]
+      python:
+        flags: [python]
+    patch:
+      default: false
+      rust:
+        flags: [rust]
+      python:
+        flags: [python]
+
+flags:
+  rust:
+    paths:
+      - src/
+  python:
+    paths:
+      - python/
