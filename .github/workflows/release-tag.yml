@@ -1,18 +1,23 @@
-name: Release-plz
+name: Tag release
 
-# Tags + creates the GitHub Release whenever Cargo.toml's version isn't tagged
-# yet, which release.yml picks up to build and publish. RELEASE_PLZ_TOKEN (a
-# fine-grained PAT) is needed for that tag to trigger release.yml — GitHub's
-# default token can't trigger other workflows.
+# Tags Cargo.toml's current version if it isn't tagged yet, and creates a
+# GitHub Release with auto-generated notes (grouped by merged PRs). Pushing
+# the vX.Y.Z tag triggers release.yml, which builds wheels and publishes to
+# PyPI. RELEASE_PLZ_TOKEN (a fine-grained PAT, name kept from a since-removed
+# release-plz setup) is needed for that tag push to trigger release.yml —
+# GitHub's default token can't trigger other workflows.
 #
-# No release-pr job: release-plz can't compute a version bump for a crate
-# that's never been published to any cargo registry (publish = false in
-# release-plz.toml) — it has no baseline to diff against, so `release-pr`
-# silently no-ops on every push instead of opening a "release vX.Y.Z" PR. To
-# cut a release, bump the `version` in Cargo.toml yourself in a normal PR;
-# this job tags + releases it once that PR merges. GitHub's own auto-generated
-# release notes (grouped by merged PRs) fill in the release body below, since
-# release-plz's own notes require a CHANGELOG.md we no longer maintain.
+# To cut a release: bump `version` in Cargo.toml in a normal PR and merge it.
+# No changelog to maintain — GitHub's own "generate release notes" fills in
+# the release body from merged PRs.
+#
+# Previously used release-plz for this, including an automated "release
+# vX.Y.Z" PR step. Dropped: release-plz can't compute a version bump for a
+# crate that's never been published to any cargo registry — it has no
+# baseline to diff against, so that step silently no-op'd on every push
+# instead of opening a PR. The tag/release step it did work reliably, but by
+# that point it was a thin wrapper around a few `git`/`gh` calls, not worth a
+# pinned third-party action + Rust toolchain install to run it.
 
 on:
   push:
@@ -23,32 +28,27 @@ permissions:
   contents: read
 
 jobs:
-  release-plz-release:
-    name: Release-plz release
+  tag-release:
+    name: Tag and release
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      - id: release-plz
-        uses: release-plz/action@e8792575c7f2366cf6ff3ccc33ead9ace5b691c7 # v0.5.130
-        with:
-          command: release
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
-      - name: Fill release notes from merged PRs
-        if: steps.release-plz.outputs.releases_created == 'true'
+      - name: Tag and release if Cargo.toml's version isn't tagged yet
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
-          RELEASES_JSON: ${{ steps.release-plz.outputs.releases }}
         run: |
           set -euo pipefail
-          echo "$RELEASES_JSON" | jq -r '.[].tag' | while read -r tag; do
-            notes=$(gh api "repos/${{ github.repository }}/releases/generate-notes" -f tag_name="$tag" --jq .body)
-            gh release edit "$tag" --repo "${{ github.repository }}" --notes "$notes"
-          done
+          version=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          tag="v$version"
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q "refs/tags/$tag$"; then
+            echo "Tag $tag already exists, nothing to do."
+            exit 0
+          fi
+          git tag "$tag"
+          git push origin "$tag"
+          gh release create "$tag" --repo "${{ github.repository }}" --generate-notes
