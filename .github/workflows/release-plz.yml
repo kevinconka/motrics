@@ -1,9 +1,18 @@
 name: Release-plz
 
-# Keeps a "release vX.Y.Z" PR up to date from Conventional Commits; merging it
-# tags + creates the GitHub Release, which release.yml picks up to build and
-# publish. RELEASE_PLZ_TOKEN (a fine-grained PAT) is needed for that tag to
-# trigger release.yml — GitHub's default token can't trigger other workflows.
+# Tags + creates the GitHub Release whenever Cargo.toml's version isn't tagged
+# yet, which release.yml picks up to build and publish. RELEASE_PLZ_TOKEN (a
+# fine-grained PAT) is needed for that tag to trigger release.yml — GitHub's
+# default token can't trigger other workflows.
+#
+# No release-pr job: release-plz can't compute a version bump for a crate
+# that's never been published to any cargo registry (publish = false in
+# release-plz.toml) — it has no baseline to diff against, so `release-pr`
+# silently no-ops on every push instead of opening a "release vX.Y.Z" PR. To
+# cut a release, bump the `version` in Cargo.toml yourself in a normal PR;
+# this job tags + releases it once that PR merges. GitHub's own auto-generated
+# release notes (grouped by merged PRs) fill in the release body below, since
+# release-plz's own notes require a CHANGELOG.md we no longer maintain.
 
 on:
   push:
@@ -26,29 +35,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: release-plz/action@e8792575c7f2366cf6ff3ccc33ead9ace5b691c7 # v0.5.130
+      - id: release-plz
+        uses: release-plz/action@e8792575c7f2366cf6ff3ccc33ead9ace5b691c7 # v0.5.130
         with:
           command: release
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
-
-  release-plz-pr:
-    name: Release-plz PR
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    concurrency:
-      group: release-plz-${{ github.ref }}
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: release-plz/action@e8792575c7f2366cf6ff3ccc33ead9ace5b691c7 # v0.5.130
-        with:
-          command: release-pr
+      - name: Fill release notes from merged PRs
+        if: steps.release-plz.outputs.releases_created == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          echo '${{ steps.release-plz.outputs.releases }}' | jq -r '.[].tag' | while read -r tag; do
+            notes=$(gh api "repos/${{ github.repository }}/releases/generate-notes" -f tag_name="$tag" --jq .body)
+            gh release edit "$tag" --repo "${{ github.repository }}" --notes "$notes"
+          done
