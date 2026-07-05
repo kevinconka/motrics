@@ -1,3 +1,0 @@
-[workspace]
-# motrics isn't published to any cargo registry.
-publish = false

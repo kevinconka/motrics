@@ -181,8 +181,8 @@ it yourself.
 <summary>Roadmap</summary>
 
 - [x] Project scaffolding (build, lint, packaging, CI)
-- [x] Published to PyPI (`pip install motrics`), automated releases via
-      [release-plz](https://release-plz.dev/)
+- [x] Published to PyPI (`pip install motrics`), automated tag-and-release on
+      every `Cargo.toml` version bump (see `.github/workflows/release-tag.yml`)
 - [x] Bounding-box IoU + assignment (Hungarian/greedy) primitives
 - [x] CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
 - [x] Identity metrics (IDF1 / IDP / IDR)
