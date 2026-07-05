@@ -34,7 +34,7 @@ that comment.
 
 ## Chart
 
-The bar chart in the top-level README (`benchmarks/assets/speedup-*.png`) is
+The bar chart in the top-level README (`benchmarks/assets/speedup-*.svg`) is
 generated from `plot_speedup.py`, not measured at doc-build time. After a
 benchmark run shows the numbers have meaningfully drifted, update `DATA` in
 that script and regenerate:

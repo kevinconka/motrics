@@ -14,6 +14,15 @@
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="benchmarks/assets/speedup-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="benchmarks/assets/speedup-light.svg">
+    <img alt="Bar chart: motrics computes CLEAR+Identity+HOTA in 770ms vs TrackEval's 5930ms (7.7x faster), and CLEAR+Identity in 443ms vs py-motmetrics' 6211ms (14.0x faster)." src="benchmarks/assets/speedup-light.svg" width="480">
+  </picture>
+</p>
+<p align="center"><i>MOT17-train, wall time, from a live CI run — see <a href="#benchmarks">Benchmarks</a>.</i></p>
+
 ## Highlights
 
 - ⚡ **Extremely fast** — Rust core, ~7–9× faster than TrackEval and ~12–16×
@@ -155,16 +164,8 @@ per-frame Python bookkeeping)? Here's how the field names line up:
 
 ## Benchmarks
 
-On real MOT17 data, release build, end-to-end from raw boxes:
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="benchmarks/assets/speedup-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="benchmarks/assets/speedup-light.png">
-    <img alt="Bar chart: motrics computes CLEAR+Identity+HOTA in 770ms vs TrackEval's 5930ms (7.7x faster), and CLEAR+Identity in 443ms vs py-motmetrics' 6211ms (14.0x faster)." src="benchmarks/assets/speedup-light.png">
-  </picture>
-</p>
-<p align="center"><i>Wall time summed over every MOT17-train sequence, from a live CI run.</i></p>
+On real MOT17 data, release build, end-to-end from raw boxes (chart at the top
+of this README):
 
 | motrics vs…   | Metrics                | Speedup |
 | ------------- | ----------------------- | ------- |

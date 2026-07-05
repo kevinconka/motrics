@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the README benchmark chart (light + dark PNGs).
+"""Regenerate the README benchmark chart (light + dark SVGs).
 
 Numbers below are wall time (ms) summed over all MOT17 sequences, taken from a
 live CI run (see the benchmark comment on any PR). Update DATA after a fresh
@@ -20,25 +20,19 @@ from matplotlib.axes import Axes
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 
-DATA = [
-    {
-        "label": "CLEAR + Identity + HOTA",
-        "bars": [("motrics", 770), ("TrackEval", 5930)],
-    },
-    {
-        "label": "CLEAR + Identity",
-        "bars": [("motrics", 443), ("py-motmetrics", 6211)],
-    },
+DATA: list[tuple[str, list[tuple[str, int]]]] = [
+    ("CLEAR + Identity + HOTA", [("motrics", 770), ("TrackEval", 5930)]),
+    ("CLEAR + Identity", [("motrics", 443), ("py-motmetrics", 6211)]),
 ]
 
 # Validated via dataviz's scripts/validate_palette.js — see references/palette.md
-# categorical slots 1 (blue), 2 (aqua), 3 (yellow).
+# categorical slots 1 (blue), 2 (aqua), 3 (yellow). No surface color: charts
+# render on a transparent background, so only mark/text colors are themed.
 PALETTES: dict[str, dict[str, str]] = {
     "light": {
         "motrics": "#2a78d6",
         "TrackEval": "#1baf7a",
         "py-motmetrics": "#eda100",
-        "surface": "#fcfcfb",
         "primary": "#0b0b0b",
         "secondary": "#52514e",
         "muted": "#898781",
@@ -49,7 +43,6 @@ PALETTES: dict[str, dict[str, str]] = {
         "motrics": "#3987e5",
         "TrackEval": "#199e70",
         "py-motmetrics": "#c98500",
-        "surface": "#1a1a19",
         "primary": "#ffffff",
         "secondary": "#c3c2b7",
         "muted": "#898781",
@@ -80,21 +73,19 @@ def _rounded_bar(ax: Axes, y: float, width: float, color: str) -> None:
 
 def render(mode: Literal["light", "dark"]) -> Path:
     palette = PALETTES[mode]
-    max_ms = max(ms for group in DATA for _, ms in group["bars"])
+    max_ms = max(ms for _, bars in DATA for _, ms in bars)
 
-    fig, ax = plt.subplots(figsize=(7.2, 3.4), dpi=200)
-    fig.patch.set_facecolor(palette["surface"])
-    ax.set_facecolor(palette["surface"])
+    fig, ax = plt.subplots(figsize=(6.4, 2.8))
 
     y = 0.0
-    for group in DATA:
-        motrics_ms = group["bars"][0][1]
-        other_ms = group["bars"][1][1]
+    for label, bars in DATA:
+        motrics_ms = bars[0][1]
+        other_ms = bars[1][1]
         speedup = other_ms / motrics_ms
         ax.text(
             0,
             y,
-            f"{group['label']}  —  {speedup:.1f}× faster",
+            f"{label}  —  {speedup:.1f}x faster",
             va="center",
             ha="left",
             fontsize=10,
@@ -103,7 +94,7 @@ def render(mode: Literal["light", "dark"]) -> Path:
         )
         y -= HEADING_STEP
 
-        for name, ms in group["bars"]:
+        for name, ms in bars:
             _rounded_bar(ax, y, ms, palette[name])
             ax.text(
                 ms + max_ms * 0.02,
@@ -125,14 +116,16 @@ def render(mode: Literal["light", "dark"]) -> Path:
     ax.spines["bottom"].set_visible(True)
     ax.spines["bottom"].set_color(palette["axis"])
     ax.tick_params(axis="x", colors=palette["muted"], labelsize=8)
-    ax.set_xlabel("wall time, ms (lower is better)", color=palette["muted"], fontsize=8.5)
+    ax.set_xlabel(
+        "wall time, ms (lower is better)", color=palette["muted"], fontsize=8.5
+    )
     ax.grid(axis="x", color=palette["grid"], linewidth=0.8, zorder=0)
     ax.set_axisbelow(True)
 
-    fig.tight_layout(pad=1.2)
+    fig.tight_layout(pad=1.0)
     ASSETS_DIR.mkdir(exist_ok=True)
-    out_path = ASSETS_DIR / f"speedup-{mode}.png"
-    fig.savefig(out_path, facecolor=palette["surface"])
+    out_path = ASSETS_DIR / f"speedup-{mode}.svg"
+    fig.savefig(out_path, transparent=True)
     plt.close(fig)
     return out_path
 
