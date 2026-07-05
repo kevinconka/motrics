@@ -45,8 +45,10 @@ jobs:
         if: steps.release-plz.outputs.releases_created == 'true'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
+          RELEASES_JSON: ${{ steps.release-plz.outputs.releases }}
         run: |
-          echo '${{ steps.release-plz.outputs.releases }}' | jq -r '.[].tag' | while read -r tag; do
+          set -euo pipefail
+          echo "$RELEASES_JSON" | jq -r '.[].tag' | while read -r tag; do
             notes=$(gh api "repos/${{ github.repository }}/releases/generate-notes" -f tag_name="$tag" --jq .body)
             gh release edit "$tag" --repo "${{ github.repository }}" --notes "$notes"
           done
