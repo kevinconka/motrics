@@ -262,7 +262,8 @@ fn mask_area(mask: &Bound<'_, PyAny>) -> PyResult<u64> {
 ///
 /// If `is_crowd` is set, `mask_b` is a crowd/ignore region: the score is
 /// intersection over `mask_a`'s own area rather than the union, matching
-/// pycocotools' `iscrowd` semantics.
+/// pycocotools' `iscrowd` semantics (spelled `is_crowd` here for consistency
+/// with the rest of this library's snake_case parameters).
 #[pyfunction]
 #[pyo3(signature = (mask_a, mask_b, is_crowd=false))]
 fn mask_iou(mask_a: &Bound<'_, PyAny>, mask_b: &Bound<'_, PyAny>, is_crowd: bool) -> PyResult<f64> {
@@ -271,19 +272,52 @@ fn mask_iou(mask_a: &Bound<'_, PyAny>, mask_b: &Bound<'_, PyAny>, is_crowd: bool
 
 /// Pairwise IoU matrix between two sets of masks.
 ///
-/// `iscrowd`, if given, must have one entry per mask in `masks_b`; a `true`
+/// `is_crowd`, if given, must have one entry per mask in `masks_b`; a `true`
 /// entry makes that column an IoA-against-`masks_a`-only crowd region,
 /// matching pycocotools' `iou(dt, gt, iscrowd)`.
 #[pyfunction]
-#[pyo3(signature = (masks_a, masks_b, iscrowd=None))]
+#[pyo3(signature = (masks_a, masks_b, is_crowd=None))]
 fn mask_iou_matrix(
     masks_a: Vec<Bound<'_, PyAny>>,
     masks_b: Vec<Bound<'_, PyAny>>,
-    iscrowd: Option<Vec<bool>>,
+    is_crowd: Option<Vec<bool>>,
 ) -> PyResult<Vec<Vec<f64>>> {
     let a: Vec<mask::Rle> = masks_a.iter().map(extract_rle).collect::<PyResult<_>>()?;
     let b: Vec<mask::Rle> = masks_b.iter().map(extract_rle).collect::<PyResult<_>>()?;
-    mask::iou_matrix(&a, &b, iscrowd.as_deref()).map_err(PyValueError::new_err)
+    mask::iou_matrix(&a, &b, is_crowd.as_deref()).map_err(PyValueError::new_err)
+}
+
+/// Merge a list of same-size masks into their union (`intersect=False`, the
+/// default) or intersection (`intersect=True`), matching pycocotools'
+/// `merge(rles, intersect)`. An empty list yields an empty `Mask((0, 0), [])`.
+/// Unlike pycocotools (which silently returns an empty mask on a size
+/// mismatch between inputs), a genuine mismatch raises `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (masks, intersect=false))]
+fn mask_merge(masks: Vec<Bound<'_, PyAny>>, intersect: bool) -> PyResult<Mask> {
+    let rles: Vec<mask::Rle> = masks.iter().map(extract_rle).collect::<PyResult<_>>()?;
+    Ok(Mask {
+        rle: mask::merge(&rles, intersect).map_err(PyValueError::new_err)?,
+    })
+}
+
+/// Bounding box of a mask's foreground pixels, or `(0, 0, 0, 0)` if it has
+/// none.
+///
+/// `box_format` is `"xyxy"` (default, matching every other box primitive in
+/// this library — `iou`, `match_boxes`, `compute_clear`, ...) or `"xywh"`
+/// (pycocotools' own `toBbox` convention).
+#[pyfunction]
+#[pyo3(signature = (mask, box_format="xyxy"))]
+fn mask_to_bbox(mask: &Bound<'_, PyAny>, box_format: &str) -> PyResult<(f64, f64, f64, f64)> {
+    let (x1, y1, x2, y2) = extract_rle(mask)?.bbox();
+    match box_format {
+        "xyxy" => Ok((x1, y1, x2, y2)),
+        "xywh" => Ok((x1, y1, x2 - x1, y2 - y1)),
+        other => Err(PyValueError::new_err(format!(
+            "unknown box_format {other:?}, expected \"xyxy\" or \"xywh\""
+        ))),
+    }
 }
 
 /// Decode a mask to a dense `(h, w)` nested list of `0`/`1` values.
@@ -810,6 +844,8 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mask_iou_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(mask_decode, m)?)?;
     m.add_function(wrap_pyfunction!(mask_encode, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_merge, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_to_bbox, m)?)?;
     m.add_class::<Mask>()?;
     m.add_function(wrap_pyfunction!(compute_clear, m)?)?;
     m.add_function(wrap_pyfunction!(compute_clear_from_similarity, m)?)?;

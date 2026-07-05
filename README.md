@@ -229,16 +229,22 @@ it yourself.
         predictions), validated against TrackEval's own
         `get_preprocessed_seq_data`.
   - [x] Mask-IoU similarity kernel (KITTI-MOTS, BDD-MOTS, DAVIS) — `Mask`,
-        `mask_iou`/`mask_iou_matrix`/`mask_area`/`mask_decode`/`mask_encode`,
-        a from-scratch Rust port of pycocotools' RLE codec and direct
-        run-based intersection/union sweep (no dense-array decode), including
-        the `iscrowd`/IoA semantics TrackEval's mask datasets use. Accepts
-        pycocotools' own RLE dicts directly (`{"size": [h, w], "counts":
-        ...}`, compressed `str`/`bytes` or already-decoded run lengths — no
-        `pycocotools` install required), validated byte-for-byte and
-        numerically against a real `pycocotools` build. The dataset adapters
-        themselves (KITTI-MOTS/BDD-MOTS/DAVIS ingest) are separate, future
-        work — this is the similarity kernel they'll need.
+        `mask_iou`/`mask_iou_matrix`/`mask_area`/`mask_decode`/`mask_encode`/
+        `mask_merge`/`mask_to_bbox`, a from-scratch Rust port of pycocotools'
+        RLE codec, a direct run-based intersection/union sweep (no
+        dense-array decode), and the `merge`/`toBbox` primitives TrackEval's
+        real KITTI-MOTS/MOTSChallenge/RobMOTS adapters need for ignore-region
+        unioning and size-based filtering. Includes the `is_crowd`/IoA
+        semantics TrackEval's mask datasets use, spelled `is_crowd`
+        consistently on both `mask_iou` and `mask_iou_matrix` (matching this
+        library's own naming convention, rather than pycocotools' `iscrowd`).
+        Accepts pycocotools' own RLE dicts directly (`{"size":
+        [h, w], "counts": ...}`, compressed `str`/`bytes` or already-decoded
+        run lengths — no `pycocotools` install required), validated
+        byte-for-byte and numerically against a real `pycocotools` build.
+        The dataset adapters themselves (KITTI-MOTS/BDD-MOTS/DAVIS ingest)
+        are separate, future work — this is the similarity kernel (plus the
+        two extra primitives those adapters specifically need) they'll use.
   - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
 
 </details>

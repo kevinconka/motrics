@@ -73,18 +73,18 @@ def test_mask_iou_accepts_pycocotools_style_dict() -> None:
 def test_mask_iou_matrix_shape_and_crowd_column() -> None:
     a = [motrics.Mask((2, 2), [0, 4])]
     b = [motrics.Mask((2, 2), [0, 4]), motrics.Mask((2, 2), [2, 2])]
-    matrix = motrics.mask_iou_matrix(a, b, iscrowd=[False, True])
+    matrix = motrics.mask_iou_matrix(a, b, is_crowd=[False, True])
     assert len(matrix) == 1
     assert len(matrix[0]) == 2
     assert matrix[0][0] == pytest.approx(1.0)
     assert matrix[0][1] == pytest.approx(0.5)  # crowd column: inter=2 / area(a[0])=4
 
 
-def test_mask_iou_matrix_iscrowd_length_mismatch_raises() -> None:
+def test_mask_iou_matrix_is_crowd_length_mismatch_raises() -> None:
     a = [motrics.Mask((2, 2), [0, 4])]
     b = [motrics.Mask((2, 2), [0, 4]), motrics.Mask((2, 2), [2, 2])]
-    with pytest.raises(ValueError, match="iscrowd"):
-        motrics.mask_iou_matrix(a, b, iscrowd=[False])
+    with pytest.raises(ValueError, match="is_crowd"):
+        motrics.mask_iou_matrix(a, b, is_crowd=[False])
 
 
 def test_mask_new_rejects_counts_not_covering_the_mask_area() -> None:
@@ -152,5 +152,66 @@ def test_mask_iou_matrix_matches_pycocotools() -> None:
     iscrowd = [False, True, False, True]
 
     ref = pycocotools_mask.iou(rles_a, rles_b, iscrowd)
-    got = motrics.mask_iou_matrix(rles_a, rles_b, iscrowd=iscrowd)
+    got = motrics.mask_iou_matrix(rles_a, rles_b, is_crowd=iscrowd)
     assert np.allclose(got, ref, atol=1e-9)
+
+
+def test_mask_merge_union_and_intersection() -> None:
+    a = motrics.Mask((4, 1), [0, 2, 2])  # foreground rows 0-1
+    b = motrics.Mask((4, 1), [1, 2, 1])  # foreground rows 1-2
+    union = motrics.mask_merge([a, b])
+    inter = motrics.mask_merge([a, b], intersect=True)
+    assert motrics.mask_decode(union) == [[1], [1], [1], [0]]
+    assert motrics.mask_decode(inter) == [[0], [1], [0], [0]]
+
+
+def test_mask_merge_of_empty_list_is_empty_mask() -> None:
+    empty = motrics.mask_merge([])
+    assert empty.size == (0, 0)
+    assert empty.area() == 0
+
+
+def test_mask_merge_size_mismatch_raises() -> None:
+    a = motrics.Mask((2, 2), [0, 4])
+    b = motrics.Mask((3, 3), [0, 9])
+    with pytest.raises(ValueError, match="mask size mismatch"):
+        motrics.mask_merge([a, b])
+
+
+def test_mask_merge_matches_pycocotools() -> None:
+    rng = np.random.RandomState(4)
+    for intersect in (False, True):
+        bits = [(rng.rand(15, 12) > 0.5).astype(np.uint8) for _ in range(4)]
+        rles = [pycocotools_mask.encode(np.asfortranarray(b)) for b in bits]
+        ref = pycocotools_mask.merge(rles, intersect=intersect)
+        got = motrics.mask_merge(rles, intersect=intersect)
+        assert got.to_coco().encode() == ref["counts"]
+
+
+def test_mask_to_bbox_default_is_xyxy() -> None:
+    # 4x4, single foreground pixel at row=1, col=1 -> xywh (1,1,1,1).
+    mask = motrics.Mask((4, 4), [5, 1, 10])
+    assert motrics.mask_to_bbox(mask) == (1.0, 1.0, 2.0, 2.0)
+    assert motrics.mask_to_bbox(mask, box_format="xywh") == (1.0, 1.0, 1.0, 1.0)
+
+
+def test_mask_to_bbox_empty_mask_is_zero() -> None:
+    empty = motrics.Mask((4, 4), [16])
+    assert motrics.mask_to_bbox(empty) == (0.0, 0.0, 0.0, 0.0)
+
+
+def test_mask_to_bbox_unknown_box_format_raises() -> None:
+    mask = motrics.Mask((2, 2), [0, 4])
+    with pytest.raises(ValueError, match="unknown box_format"):
+        motrics.mask_to_bbox(mask, box_format="nope")  # ty: ignore[invalid-argument-type]
+
+
+def test_mask_to_bbox_matches_pycocotools() -> None:
+    rng = np.random.RandomState(5)
+    for _ in range(20):
+        shape = (rng.randint(1, 25), rng.randint(1, 25))
+        bits = (rng.rand(*shape) > 0.5).astype(np.uint8)
+        rle = pycocotools_mask.encode(np.asfortranarray(bits))
+        ref_xywh = tuple(pycocotools_mask.toBbox([rle])[0].tolist())
+        got_xywh = motrics.mask_to_bbox(rle, box_format="xywh")
+        assert got_xywh == pytest.approx(ref_xywh, abs=1e-9)

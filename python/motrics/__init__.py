@@ -27,6 +27,8 @@ from motrics._motrics import (
     mask_encode,
     mask_iou,
     mask_iou_matrix,
+    mask_merge,
+    mask_to_bbox,
     match_boxes,
     version,
 )
@@ -68,6 +70,8 @@ __all__ = [
     "mask_encode",
     "mask_iou",
     "mask_iou_matrix",
+    "mask_merge",
+    "mask_to_bbox",
     "match_boxes",
     "preprocess_kitti",
     "preprocess_motchallenge",

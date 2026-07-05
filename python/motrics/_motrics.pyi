@@ -93,11 +93,11 @@ def mask_iou(mask_a: MaskLike, mask_b: MaskLike, is_crowd: bool = False) -> floa
 def mask_iou_matrix(
     masks_a: Sequence[MaskLike],
     masks_b: Sequence[MaskLike],
-    iscrowd: Sequence[bool] | None = None,
+    is_crowd: Sequence[bool] | None = None,
 ) -> list[list[float]]:
     """Pairwise IoU matrix between two sets of masks.
 
-    ``iscrowd``, if given, must have one entry per mask in ``masks_b``; a
+    ``is_crowd``, if given, must have one entry per mask in ``masks_b``; a
     ``True`` entry makes that column an IoA-against-``masks_a``-only crowd
     region, matching pycocotools' ``iou(dt, gt, iscrowd)``.
     """
@@ -110,6 +110,28 @@ def mask_decode(mask: MaskLike) -> list[list[int]]:
 def mask_encode(bitmap: npt.NDArray[np.uint8]) -> Mask:
     """Encode a dense ``(h, w)`` ``uint8`` NumPy array (any nonzero value is
     foreground) into a :class:`Mask`."""
+    ...
+
+def mask_merge(masks: Sequence[MaskLike], intersect: bool = False) -> Mask:
+    """Merge masks into their union (default) or intersection.
+
+    Matches pycocotools' ``merge(rles, intersect)``. An empty ``masks``
+    yields an empty ``Mask((0, 0), [])``. Unlike pycocotools, which silently
+    returns an empty mask on a size mismatch between inputs, a genuine
+    mismatch raises ``ValueError``.
+    """
+    ...
+
+def mask_to_bbox(
+    mask: MaskLike, box_format: BoxFormat = "xyxy"
+) -> tuple[float, float, float, float]:
+    """Bounding box of a mask's foreground pixels, or ``(0, 0, 0, 0)`` if it
+    has none.
+
+    ``box_format`` is ``"xyxy"`` (default, matching every other box
+    primitive in this library) or ``"xywh"`` (pycocotools' own ``toBbox``
+    convention).
+    """
     ...
 
 class Matching:

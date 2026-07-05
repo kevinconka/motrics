@@ -65,6 +65,53 @@ impl Rle {
             .sum()
     }
 
+    /// Bounding box of the foreground pixels as `(x1, y1, x2, y2)` — this
+    /// crate's `xyxy` convention (`x2`/`y2` exclusive) — or `(0, 0, 0, 0)`
+    /// for an empty mask. Computed directly from the run lengths in
+    /// `O(len(counts))`, without decoding to a dense mask: each foreground
+    /// run's column-major span converts to a `(row, col)` range in one step
+    /// (`divmod` by `h`), since a run confined to one column only touches
+    /// that column's rows, while a run spanning multiple columns always
+    /// touches every row (column-major order guarantees the run covers each
+    /// of those columns fully except possibly the first and last).
+    pub fn bbox(&self) -> (f64, f64, f64, f64) {
+        let h = self.h as u64;
+        let mut bounds: Option<(u64, u64, u64, u64)> = None; // (min_row, max_row, min_col, max_col)
+        let mut offset: u64 = 0;
+        for (i, &run) in self.counts.iter().enumerate() {
+            if i % 2 == 1 && run > 0 {
+                let start = offset;
+                let end = offset + u64::from(run) - 1;
+                let (start_col, start_row) = (start / h, start % h);
+                let (end_col, end_row) = (end / h, end % h);
+                let (run_min_row, run_max_row) = if start_col == end_col {
+                    (start_row, end_row)
+                } else {
+                    (0, h - 1)
+                };
+                bounds = Some(match bounds {
+                    None => (run_min_row, run_max_row, start_col, end_col),
+                    Some((min_row, max_row, min_col, max_col)) => (
+                        min_row.min(run_min_row),
+                        max_row.max(run_max_row),
+                        min_col.min(start_col),
+                        max_col.max(end_col),
+                    ),
+                });
+            }
+            offset += u64::from(run);
+        }
+        match bounds {
+            None => (0.0, 0.0, 0.0, 0.0),
+            Some((min_row, max_row, min_col, max_col)) => (
+                min_col as f64,
+                min_row as f64,
+                (max_col + 1) as f64,
+                (max_row + 1) as f64,
+            ),
+        }
+    }
+
     /// Decode to a dense column-major `0`/`1` byte mask of length `h * w`.
     pub fn to_dense(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.h * self.w);
@@ -246,14 +293,20 @@ pub fn iou(a: &Rle, b: &Rle, is_crowd: bool) -> Result<f64, String> {
 
 /// Pairwise IoU matrix between two sets of RLE masks.
 ///
-/// `iscrowd`, if given, must have one entry per `b` mask (a column); a `true`
-/// entry makes that column an IoA-against-`a`-only crowd region rather than a
-/// normal IoU pair, matching pycocotools' `iou(dt, gt, iscrowd)`.
-pub fn iou_matrix(a: &[Rle], b: &[Rle], iscrowd: Option<&[bool]>) -> Result<Vec<Vec<f64>>, String> {
-    if let Some(flags) = iscrowd {
+/// `is_crowd`, if given, must have one entry per `b` mask (a column); a
+/// `true` entry makes that column an IoA-against-`a`-only crowd region
+/// rather than a normal IoU pair, matching pycocotools' `iou(dt, gt,
+/// iscrowd)` semantics (spelled `is_crowd` here for consistency with
+/// [`iou`]'s parameter of the same meaning).
+pub fn iou_matrix(
+    a: &[Rle],
+    b: &[Rle],
+    is_crowd: Option<&[bool]>,
+) -> Result<Vec<Vec<f64>>, String> {
+    if let Some(flags) = is_crowd {
         if flags.len() != b.len() {
             return Err(format!(
-                "iscrowd must have one entry per mask in the second set, got {} for {}",
+                "is_crowd must have one entry per mask in the second set, got {} for {}",
                 flags.len(),
                 b.len()
             ));
@@ -263,10 +316,84 @@ pub fn iou_matrix(a: &[Rle], b: &[Rle], iscrowd: Option<&[bool]>) -> Result<Vec<
         .map(|ma| {
             b.iter()
                 .enumerate()
-                .map(|(j, mb)| iou(ma, mb, iscrowd.map(|f| f[j]).unwrap_or(false)))
+                .map(|(j, mb)| iou(ma, mb, is_crowd.map(|f| f[j]).unwrap_or(false)))
                 .collect()
         })
         .collect()
+}
+
+/// Merge two same-size masks into one, coalescing adjacent same-value runs,
+/// computing their union or intersection. The lockstep walk is the same one
+/// [`intersection_and_union`] uses; unlike that function this one emits the
+/// merged run-length sequence itself rather than just area sums.
+///
+/// The result's `counts` always sum to `h * w` (the walk consumes exactly
+/// that much from each input, which itself already satisfies the
+/// invariant), so this builds the output `Rle` directly rather than paying
+/// for a redundant [`Rle::new`] coverage check.
+fn pairwise_merge(a: &Rle, b: &Rle, intersect: bool) -> Rle {
+    let (mut ca, mut cb) = (a.counts[0], b.counts[0]);
+    let (mut ka, mut kb) = (1usize, 1usize);
+    let (mut va, mut vb) = (false, false);
+    let mut value = false;
+    let mut counts = Vec::new();
+    let mut run = 0u32;
+    loop {
+        let c = ca.min(cb);
+        run += c;
+        ca -= c;
+        if ca == 0 && ka < a.counts.len() {
+            ca = a.counts[ka];
+            ka += 1;
+            va = !va;
+        }
+        cb -= c;
+        if cb == 0 && kb < b.counts.len() {
+            cb = b.counts[kb];
+            kb += 1;
+            vb = !vb;
+        }
+        let previous = value;
+        value = if intersect { va && vb } else { va || vb };
+        let done = ca == 0 && cb == 0;
+        if value != previous || done {
+            counts.push(run);
+            run = 0;
+        }
+        if done {
+            break;
+        }
+    }
+    Rle {
+        h: a.h,
+        w: a.w,
+        counts,
+    }
+}
+
+/// Merge a list of same-size masks into their union (`intersect=false`, the
+/// default) or intersection (`intersect=true`), matching pycocotools'
+/// `merge(rles, intersect)`. An empty list yields an empty `0x0` mask
+/// (matching pycocotools). Unlike pycocotools, which silently returns an
+/// empty mask on a size mismatch between inputs, this raises a clear error.
+pub fn merge(masks: &[Rle], intersect: bool) -> Result<Rle, String> {
+    let Some(first) = masks.first() else {
+        return Rle::new(0, 0, Vec::new());
+    };
+    for other in &masks[1..] {
+        if other.h != first.h || other.w != first.w {
+            return Err(format!(
+                "mask size mismatch: {:?} vs {:?}",
+                (first.h, first.w),
+                (other.h, other.w)
+            ));
+        }
+    }
+    let mut acc = first.clone();
+    for other in &masks[1..] {
+        acc = pairwise_merge(&acc, other, intersect);
+    }
+    Ok(acc)
 }
 
 #[cfg(test)]
@@ -437,5 +564,80 @@ mod tests {
         // A syntactically valid but short compressed string (decodes fine,
         // just doesn't cover h * w) must be rejected too.
         assert!(Rle::from_compressed(10, 1, "5").is_err());
+    }
+
+    #[test]
+    fn bbox_of_empty_mask_is_zero() {
+        let empty = Rle::from_dense(4, 4, &[0u8; 16]);
+        assert_eq!(empty.bbox(), (0.0, 0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn bbox_matches_pycocotools_example() {
+        // Validated against real pycocotools: bits (row-major)
+        // [[0,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,0,0]] -> toBbox (xywh) = [1,1,3,2].
+        #[rustfmt::skip]
+        let column_major = [
+            0, 0, 0, 0, // column 0
+            0, 1, 0, 0, // column 1
+            0, 0, 0, 0, // column 2
+            0, 0, 1, 0, // column 3
+        ];
+        let rle = Rle::from_dense(4, 4, &column_major);
+        assert_eq!(rle.bbox(), (1.0, 1.0, 4.0, 3.0)); // xyxy = xywh (1,1,3,2) + 1 on the max end
+    }
+
+    #[test]
+    fn bbox_full_mask_covers_everything() {
+        let rle = Rle::from_dense(3, 5, &[1u8; 15]);
+        assert_eq!(rle.bbox(), (0.0, 0.0, 5.0, 3.0));
+    }
+
+    #[test]
+    fn merge_union_of_two_masks() {
+        // a = {0,1}, b = {1,2} (row-major, 1x4) -> union = {0,1,2}.
+        let a = Rle::from_dense(4, 1, &[1, 1, 0, 0]);
+        let b = Rle::from_dense(4, 1, &[0, 1, 1, 0]);
+        let union = merge(&[a, b], false).unwrap();
+        assert_eq!(union.to_dense(), vec![1, 1, 1, 0]);
+    }
+
+    #[test]
+    fn merge_intersection_of_two_masks() {
+        let a = Rle::from_dense(4, 1, &[1, 1, 0, 0]);
+        let b = Rle::from_dense(4, 1, &[0, 1, 1, 0]);
+        let inter = merge(&[a, b], true).unwrap();
+        assert_eq!(inter.to_dense(), vec![0, 1, 0, 0]);
+    }
+
+    #[test]
+    fn merge_of_three_masks() {
+        let a = Rle::from_dense(3, 1, &[1, 0, 0]);
+        let b = Rle::from_dense(3, 1, &[0, 1, 0]);
+        let c = Rle::from_dense(3, 1, &[0, 0, 1]);
+        let union = merge(&[a, b, c], false).unwrap();
+        assert_eq!(union.to_dense(), vec![1, 1, 1]);
+    }
+
+    #[test]
+    fn merge_of_empty_list_is_empty_mask() {
+        let empty = merge(&[], false).unwrap();
+        assert_eq!(empty.h(), 0);
+        assert_eq!(empty.w(), 0);
+        assert_eq!(empty.area(), 0);
+    }
+
+    #[test]
+    fn merge_of_one_mask_is_itself() {
+        let a = Rle::from_dense(2, 2, &[1, 0, 0, 1]);
+        let merged = merge(std::slice::from_ref(&a), false).unwrap();
+        assert_eq!(merged, a);
+    }
+
+    #[test]
+    fn merge_size_mismatch_errors() {
+        let a = Rle::from_dense(2, 2, &[1, 0, 0, 1]);
+        let b = Rle::from_dense(3, 3, &[0u8; 9]);
+        assert!(merge(&[a, b], false).is_err());
     }
 }
