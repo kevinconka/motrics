@@ -384,6 +384,17 @@ impl Matching {
     }
 }
 
+impl From<assignment::MatchResult> for Matching {
+    fn from(result: assignment::MatchResult) -> Self {
+        Matching {
+            matches: result.matches,
+            scores: result.scores,
+            unmatched_a: result.unmatched_a,
+            unmatched_b: result.unmatched_b,
+        }
+    }
+}
+
 /// Parse a `method` argument shared by `match_boxes` and `match_masks`.
 fn parse_method(method: &str) -> PyResult<Method> {
     match method {
@@ -419,12 +430,7 @@ fn match_boxes(
     let matrix = iou::iou_matrix(&boxes_a, &boxes_b);
     let result = assignment::match_boxes(&matrix, n_a, n_b, iou_threshold, method);
 
-    Ok(Matching {
-        matches: result.matches,
-        scores: result.scores,
-        unmatched_a: result.unmatched_a,
-        unmatched_b: result.unmatched_b,
-    })
+    Ok(result.into())
 }
 
 /// Match two sets of masks, mirroring [`match_boxes`] for segmentation masks.
@@ -449,12 +455,7 @@ fn match_masks(
     let matrix = mask::iou_matrix(&a, &b, None).map_err(PyValueError::new_err)?;
     let result = assignment::match_boxes(&matrix, n_a, n_b, iou_threshold, method);
 
-    Ok(Matching {
-        matches: result.matches,
-        scores: result.scores,
-        unmatched_a: result.unmatched_a,
-        unmatched_b: result.unmatched_b,
-    })
+    Ok(result.into())
 }
 
 /// Accumulated CLEAR MOT metrics over a sequence.
