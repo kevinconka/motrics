@@ -17,6 +17,7 @@ from typing import Literal
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.ticker import MaxNLocator
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 
@@ -113,9 +114,7 @@ def render(mode: Literal["light", "dark"]) -> Path:
     ax.spines["bottom"].set_visible(True)
     ax.spines["bottom"].set_color(palette["axis"])
     ax.tick_params(axis="x", colors=palette["muted"], labelsize=8)
-    ax.set_xlabel(
-        "wall time, ms (lower is better)", color=palette["muted"], fontsize=8.5
-    )
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=4))
     ax.grid(axis="x", color=palette["grid"], linewidth=0.8, zorder=0)
     ax.set_axisbelow(True)
 
