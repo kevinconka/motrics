@@ -114,7 +114,11 @@ def render(mode: Literal["light", "dark"]) -> Path:
     ax.spines["bottom"].set_visible(True)
     ax.spines["bottom"].set_color(palette["axis"])
     ax.tick_params(axis="x", colors=palette["muted"], labelsize=8)
-    ax.xaxis.set_major_locator(MaxNLocator(nbins=4))
+    # Tick values off the data range (0..max_ms), not the padded xlim -- the
+    # padding is reserved for value-label text, not a tick-worthy range.
+    # tick_values() can overshoot vmax to land on a "nice" step, so clip.
+    ticks = [t for t in MaxNLocator(nbins=4).tick_values(0, max_ms) if t <= max_ms]
+    ax.set_xticks(ticks)
     ax.grid(axis="x", color=palette["grid"], linewidth=0.8, zorder=0)
     ax.set_axisbelow(True)
 
