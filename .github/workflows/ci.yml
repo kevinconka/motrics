@@ -74,7 +74,7 @@ jobs:
         with:
           python-version: "3.13"
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --group dev --group parity # parity deps activate the parity tests
       - name: Build instrumented extension and run tests
         run: |
           cargo llvm-cov clean --workspace

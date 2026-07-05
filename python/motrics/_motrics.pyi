@@ -1,7 +1,7 @@
 """Type stubs for the compiled ``motrics._motrics`` extension module."""
 
 from collections.abc import Sequence
-from typing import Literal
+from typing import Literal, TypedDict
 
 import numpy as np
 import numpy.typing as npt
@@ -36,6 +36,102 @@ def iou_matrix(
     boxes_a: Boxes, boxes_b: Boxes, box_format: BoxFormat = "xyxy"
 ) -> list[list[float]]:
     """Pairwise IoU matrix, ``len(boxes_a)`` rows by ``len(boxes_b)`` columns."""
+    ...
+
+class RleDict(TypedDict):
+    """A pycocotools-style RLE mask dict, as read straight from a COCO/KITTI-MOTS/
+    BDD-MOTS/DAVIS annotation file or returned by ``pycocotools.mask.encode``."""
+
+    size: Sequence[int]  # (h, w); pycocotools itself uses a `[h, w]` list
+    counts: str | bytes | Sequence[int]
+
+class Mask:
+    """A run-length-encoded binary mask (COCO/pycocotools convention):
+    alternating background/foreground run lengths, walked column-major over an
+    ``(h, w)`` image."""
+
+    def __init__(self, size: Sequence[int], counts: Sequence[int]) -> None: ...
+    @staticmethod
+    def from_coco(size: Sequence[int], counts: str | bytes) -> Mask:
+        """Decode pycocotools' compressed-string RLE form."""
+        ...
+
+    @property
+    def size(self) -> tuple[int, int]: ...
+    @property
+    def counts(self) -> list[int]:
+        """Alternating background/foreground run lengths (decoded form)."""
+
+    def area(self) -> int:
+        """Foreground pixel count."""
+        ...
+
+    def to_coco(self) -> str:
+        """pycocotools' compressed-string RLE form."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+# Anything accepted where a mask is expected: a `Mask` instance, or a
+# pycocotools-style RLE dict (`counts` compressed `str`/`bytes`, or an
+# already-decoded list of run lengths).
+MaskLike = Mask | RleDict
+
+def mask_area(mask: MaskLike) -> int:
+    """Foreground pixel count of a mask."""
+    ...
+
+def mask_iou(mask_a: MaskLike, mask_b: MaskLike, is_crowd: bool = False) -> float:
+    """Intersection-over-union of two masks of the same ``(h, w)``.
+
+    If ``is_crowd`` is set, ``mask_b`` is a crowd/ignore region: the score is
+    intersection over ``mask_a``'s own area rather than the union, matching
+    pycocotools' ``iscrowd`` semantics.
+    """
+    ...
+
+def mask_iou_matrix(
+    masks_a: Sequence[MaskLike],
+    masks_b: Sequence[MaskLike],
+    is_crowd: Sequence[bool] | None = None,
+) -> list[list[float]]:
+    """Pairwise IoU matrix between two sets of masks.
+
+    ``is_crowd``, if given, must have one entry per mask in ``masks_b``; a
+    ``True`` entry makes that column an IoA-against-``masks_a``-only crowd
+    region, matching pycocotools' ``iou(dt, gt, iscrowd)``.
+    """
+    ...
+
+def mask_decode(mask: MaskLike) -> list[list[int]]:
+    """Decode a mask to a dense ``(h, w)`` nested list of ``0``/``1`` values."""
+    ...
+
+def mask_encode(bitmap: npt.NDArray[np.uint8]) -> Mask:
+    """Encode a dense ``(h, w)`` ``uint8`` NumPy array (any nonzero value is
+    foreground) into a :class:`Mask`."""
+    ...
+
+def mask_merge(masks: Sequence[MaskLike], intersect: bool = False) -> Mask:
+    """Merge masks into their union (default) or intersection.
+
+    Matches pycocotools' ``merge(rles, intersect)``. An empty ``masks``
+    yields an empty ``Mask((0, 0), [])``. Unlike pycocotools, which silently
+    returns an empty mask on a size mismatch between inputs, a genuine
+    mismatch raises ``ValueError``.
+    """
+    ...
+
+def mask_to_bbox(
+    mask: MaskLike, box_format: BoxFormat = "xyxy"
+) -> tuple[float, float, float, float]:
+    """Bounding box of a mask's foreground pixels, or ``(0, 0, 0, 0)`` if it
+    has none.
+
+    ``box_format`` is ``"xyxy"`` (default, matching every other box
+    primitive in this library) or ``"xywh"`` (pycocotools' own ``toBbox``
+    convention).
+    """
     ...
 
 class Matching:

@@ -6,8 +6,10 @@
 
 use std::borrow::Cow;
 
+use numpy::PyReadonlyArray2;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 
 mod assignment;
 mod boxes;
@@ -15,6 +17,7 @@ mod clear;
 mod hota;
 mod identity;
 mod iou;
+mod mask;
 
 use assignment::Method;
 use boxes::{to_xyxy, BoxFormat, PyBoxes};
@@ -162,6 +165,194 @@ fn iou_matrix(boxes_a: PyBoxes, boxes_b: PyBoxes, box_format: &str) -> PyResult<
     let a = boxes_a.as_boxes(format)?;
     let b = boxes_b.as_boxes(format)?;
     Ok(iou::iou_matrix(&a, &b))
+}
+
+/// A run-length-encoded binary mask, COCO/pycocotools convention: alternating
+/// background/foreground run lengths walked column-major over an `(h, w)`
+/// image, always starting with a (possibly zero-length) background run.
+#[pyclass(frozen)]
+struct Mask {
+    rle: mask::Rle,
+}
+
+#[pymethods]
+impl Mask {
+    /// `size`: `(height, width)`. `counts`: alternating background/foreground
+    /// run lengths (the *decoded* numeric form, not pycocotools' compressed
+    /// string — use [`Mask.from_coco`] for that).
+    #[new]
+    #[pyo3(signature = (size, counts))]
+    fn new(size: [usize; 2], counts: Vec<u32>) -> PyResult<Self> {
+        Ok(Mask {
+            rle: mask::Rle::new(size[0], size[1], counts).map_err(PyValueError::new_err)?,
+        })
+    }
+
+    /// Decode pycocotools' compressed-string RLE form (`str` or `bytes`).
+    #[staticmethod]
+    fn from_coco(size: [usize; 2], counts: &Bound<'_, PyAny>) -> PyResult<Self> {
+        Ok(Mask {
+            rle: rle_from_coco_counts(size[0], size[1], counts)?,
+        })
+    }
+
+    #[getter]
+    fn size(&self) -> (usize, usize) {
+        (self.rle.h(), self.rle.w())
+    }
+
+    #[getter]
+    fn counts(&self) -> Vec<u32> {
+        self.rle.counts().to_vec()
+    }
+
+    /// Foreground pixel count.
+    fn area(&self) -> u64 {
+        self.rle.area()
+    }
+
+    /// pycocotools' compressed-string RLE form.
+    fn to_coco(&self) -> String {
+        self.rle.to_compressed()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Mask(size=({}, {}), area={})",
+            self.rle.h(),
+            self.rle.w(),
+            self.rle.area()
+        )
+    }
+}
+
+/// Decode a pycocotools-style `counts` value (`str`, `bytes`, or an
+/// already-decoded list of run lengths) into an [`mask::Rle`].
+fn rle_from_coco_counts(h: usize, w: usize, counts: &Bound<'_, PyAny>) -> PyResult<mask::Rle> {
+    if let Ok(bytes) = counts.cast::<PyBytes>() {
+        let s = std::str::from_utf8(bytes.as_bytes())
+            .map_err(|_| PyValueError::new_err("RLE counts bytes must be valid ASCII"))?;
+        return mask::Rle::from_compressed(h, w, s).map_err(PyValueError::new_err);
+    }
+    if let Ok(s) = counts.extract::<String>() {
+        return mask::Rle::from_compressed(h, w, &s).map_err(PyValueError::new_err);
+    }
+    let counts: Vec<u32> = counts.extract()?;
+    mask::Rle::new(h, w, counts).map_err(PyValueError::new_err)
+}
+
+/// Accept a [`Mask`] instance or a pycocotools-style dict
+/// (`{"size": (h, w), "counts": ...}`, `counts` compressed or already decoded).
+fn extract_rle(obj: &Bound<'_, PyAny>) -> PyResult<mask::Rle> {
+    if let Ok(m) = obj.extract::<PyRef<Mask>>() {
+        return Ok(m.rle.clone());
+    }
+    let [h, w]: [usize; 2] = obj.get_item("size")?.extract()?;
+    rle_from_coco_counts(h, w, &obj.get_item("counts")?)
+}
+
+/// Foreground pixel count of a mask (a [`Mask`] or a pycocotools-style dict).
+#[pyfunction]
+fn mask_area(mask: &Bound<'_, PyAny>) -> PyResult<u64> {
+    Ok(extract_rle(mask)?.area())
+}
+
+/// Intersection-over-union of two masks (each a [`Mask`] or a
+/// pycocotools-style dict), of the same `(h, w)`.
+///
+/// If `is_crowd` is set, `mask_b` is a crowd/ignore region: the score is
+/// intersection over `mask_a`'s own area rather than the union, matching
+/// pycocotools' `iscrowd` semantics (spelled `is_crowd` here for consistency
+/// with the rest of this library's snake_case parameters).
+#[pyfunction]
+#[pyo3(signature = (mask_a, mask_b, is_crowd=false))]
+fn mask_iou(mask_a: &Bound<'_, PyAny>, mask_b: &Bound<'_, PyAny>, is_crowd: bool) -> PyResult<f64> {
+    mask::iou(&extract_rle(mask_a)?, &extract_rle(mask_b)?, is_crowd).map_err(PyValueError::new_err)
+}
+
+/// Pairwise IoU matrix between two sets of masks.
+///
+/// `is_crowd`, if given, must have one entry per mask in `masks_b`; a `true`
+/// entry makes that column an IoA-against-`masks_a`-only crowd region,
+/// matching pycocotools' `iou(dt, gt, iscrowd)`.
+#[pyfunction]
+#[pyo3(signature = (masks_a, masks_b, is_crowd=None))]
+fn mask_iou_matrix(
+    masks_a: Vec<Bound<'_, PyAny>>,
+    masks_b: Vec<Bound<'_, PyAny>>,
+    is_crowd: Option<Vec<bool>>,
+) -> PyResult<Vec<Vec<f64>>> {
+    let a: Vec<mask::Rle> = masks_a.iter().map(extract_rle).collect::<PyResult<_>>()?;
+    let b: Vec<mask::Rle> = masks_b.iter().map(extract_rle).collect::<PyResult<_>>()?;
+    mask::iou_matrix(&a, &b, is_crowd.as_deref()).map_err(PyValueError::new_err)
+}
+
+/// Merge a list of same-size masks into their union (`intersect=False`, the
+/// default) or intersection (`intersect=True`), matching pycocotools'
+/// `merge(rles, intersect)`. An empty list yields an empty `Mask((0, 0), [])`.
+/// Unlike pycocotools (which silently returns an empty mask on a size
+/// mismatch between inputs), a genuine mismatch raises `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (masks, intersect=false))]
+fn mask_merge(masks: Vec<Bound<'_, PyAny>>, intersect: bool) -> PyResult<Mask> {
+    let rles: Vec<mask::Rle> = masks.iter().map(extract_rle).collect::<PyResult<_>>()?;
+    Ok(Mask {
+        rle: mask::merge(&rles, intersect).map_err(PyValueError::new_err)?,
+    })
+}
+
+/// Bounding box of a mask's foreground pixels, or `(0, 0, 0, 0)` if it has
+/// none.
+///
+/// `box_format` is `"xyxy"` (default, matching every other box primitive in
+/// this library — `iou`, `match_boxes`, `compute_clear`, ...) or `"xywh"`
+/// (pycocotools' own `toBbox` convention).
+#[pyfunction]
+#[pyo3(signature = (mask, box_format="xyxy"))]
+fn mask_to_bbox(mask: &Bound<'_, PyAny>, box_format: &str) -> PyResult<(f64, f64, f64, f64)> {
+    let (x1, y1, x2, y2) = extract_rle(mask)?.bbox();
+    match box_format {
+        "xyxy" => Ok((x1, y1, x2, y2)),
+        "xywh" => Ok((x1, y1, x2 - x1, y2 - y1)),
+        other => Err(PyValueError::new_err(format!(
+            "unknown box_format {other:?}, expected \"xyxy\" or \"xywh\""
+        ))),
+    }
+}
+
+/// Decode a mask to a dense `(h, w)` nested list of `0`/`1` values.
+///
+/// Returns `u32`, not `u8`: PyO3 converts `Vec<u8>` to a Python `bytes`
+/// object rather than `list[int]`, which isn't what a "nested list" caller
+/// expects here.
+#[pyfunction]
+fn mask_decode(mask: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<u32>>> {
+    let rle = extract_rle(mask)?;
+    let dense = rle.to_dense();
+    Ok((0..rle.h())
+        .map(|r| {
+            (0..rle.w())
+                .map(|c| u32::from(dense[c * rle.h() + r]))
+                .collect()
+        })
+        .collect())
+}
+
+/// Encode a dense `(h, w)` `uint8` NumPy array (any nonzero value is
+/// foreground) into a [`Mask`].
+#[pyfunction]
+fn mask_encode(bitmap: PyReadonlyArray2<u8>) -> PyResult<Mask> {
+    let view = bitmap.as_array();
+    let (h, w) = (view.shape()[0], view.shape()[1]);
+    let mut bits = Vec::with_capacity(h * w);
+    for c in 0..w {
+        for r in 0..h {
+            bits.push(view[[r, c]]);
+        }
+    }
+    Ok(Mask {
+        rle: mask::Rle::from_dense(h, w, &bits).map_err(PyValueError::new_err)?,
+    })
 }
 
 /// The result of matching two sets of boxes.
@@ -648,6 +839,14 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(iou_py, m)?)?;
     m.add_function(wrap_pyfunction!(iou_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(match_boxes, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_area, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_iou, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_iou_matrix, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_decode, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_encode, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_merge, m)?)?;
+    m.add_function(wrap_pyfunction!(mask_to_bbox, m)?)?;
+    m.add_class::<Mask>()?;
     m.add_function(wrap_pyfunction!(compute_clear, m)?)?;
     m.add_function(wrap_pyfunction!(compute_clear_from_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(compute_identity, m)?)?;
