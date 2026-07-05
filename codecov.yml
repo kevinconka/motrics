@@ -10,8 +10,12 @@ coverage:
       default: false
       rust:
         flags: [rust]
+        target: auto # new code must not be less covered than the base commit
+        threshold: 1%
       python:
         flags: [python]
+        target: auto
+        threshold: 1%
 
 flags:
   rust:
