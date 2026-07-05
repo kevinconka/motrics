@@ -33,7 +33,9 @@ impl Rle {
     /// cover exactly `h * w` pixels.
     pub fn new(h: usize, w: usize, counts: Vec<u32>) -> Result<Rle, String> {
         let total: u64 = counts.iter().map(|&c| u64::from(c)).sum();
-        let expected = (h as u64) * (w as u64);
+        let expected = (h as u64)
+            .checked_mul(w as u64)
+            .ok_or_else(|| format!("mask dimensions too large: {h} * {w} overflows"))?;
         if total != expected {
             return Err(format!(
                 "RLE counts cover {total} pixels, expected {expected} ({h} * {w})"
@@ -124,8 +126,10 @@ impl Rle {
     }
 
     /// Build an [`Rle`] from a dense column-major `0`/`1` (or any-nonzero-is-
-    /// foreground) byte mask of length `h * w`.
-    pub fn from_dense(h: usize, w: usize, bits: &[u8]) -> Rle {
+    /// foreground) byte mask, checking that `bits` has exactly `h * w`
+    /// elements (via [`Rle::new`] — the counts built from `bits` always sum
+    /// to `bits.len()`, so this is the same coverage check for free).
+    pub fn from_dense(h: usize, w: usize, bits: &[u8]) -> Result<Rle, String> {
         let mut counts = Vec::new();
         let mut value = 0u8;
         let mut run = 0u32;
@@ -140,7 +144,7 @@ impl Rle {
             }
         }
         counts.push(run);
-        Rle { h, w, counts }
+        Rle::new(h, w, counts)
     }
 
     /// Decode pycocotools' compressed-string RLE form: each run length is a
@@ -154,8 +158,10 @@ impl Rle {
     /// truncating — `s` is untrusted external input (a Python `str`/`bytes`).
     pub fn from_compressed(h: usize, w: usize, s: &str) -> Result<Rle, String> {
         // 13 groups of 5 bits comfortably covers any real u32 delta (up to
-        // ~8 groups) while keeping every shift amount (5 * k) well under
-        // i64's 64-bit width.
+        // ~8 groups). The cap alone bounds the *accumulation* shift (it uses
+        // the pre-increment k, so at most 5 * 12 = 60), but the final
+        // sign-extension shift below uses the post-increment k (up to
+        // 5 * 13 = 65) and needs its own guard.
         const MAX_GROUPS_PER_RUN: u32 = 13;
 
         let bytes = s.as_bytes();
@@ -182,6 +188,12 @@ impl Rle {
                 k += 1;
                 if !more {
                     if c & 0x10 != 0 {
+                        if 5 * k >= 64 {
+                            return Err(
+                                "RLE counts string has an oversized signed run-length group"
+                                    .to_string(),
+                            );
+                        }
                         x |= -1i64 << (5 * k);
                     }
                     break;
@@ -389,6 +401,14 @@ pub fn merge(masks: &[Rle], intersect: bool) -> Result<Rle, String> {
             ));
         }
     }
+    // A zero-area mask can have empty `counts` (e.g. `merge(&[])`'s own
+    // result), which `pairwise_merge` can't walk (it indexes `counts[0]`).
+    // Every mask here is confirmed the same size, so if one has no pixels
+    // none of them do, and merging any number of "nothing" masks is still
+    // nothing — short-circuit before ever calling `pairwise_merge`.
+    if first.h == 0 || first.w == 0 {
+        return Ok(first.clone());
+    }
     let mut acc = first.clone();
     for other in &masks[1..] {
         acc = pairwise_merge(&acc, other, intersect);
@@ -450,7 +470,7 @@ mod tests {
     #[test]
     fn dense_roundtrip() {
         let bits = [0u8, 0, 1, 1, 1, 0, 1];
-        let rle = Rle::from_dense(7, 1, &bits);
+        let rle = Rle::from_dense(7, 1, &bits).unwrap();
         assert_eq!(rle.counts, vec![2, 3, 1, 1]);
         assert_eq!(rle.to_dense(), bits);
     }
@@ -467,31 +487,31 @@ mod tests {
 
     #[test]
     fn identical_masks_have_iou_one() {
-        let a = Rle::from_dense(3, 3, &[1, 1, 0, 0, 1, 0, 0, 0, 1]);
+        let a = Rle::from_dense(3, 3, &[1, 1, 0, 0, 1, 0, 0, 0, 1]).unwrap();
         let b = a.clone();
         approx(iou(&a, &b, false).unwrap(), 1.0);
     }
 
     #[test]
     fn disjoint_masks_have_iou_zero() {
-        let a = Rle::from_dense(2, 2, &[1, 1, 0, 0]);
-        let b = Rle::from_dense(2, 2, &[0, 0, 1, 1]);
+        let a = Rle::from_dense(2, 2, &[1, 1, 0, 0]).unwrap();
+        let b = Rle::from_dense(2, 2, &[0, 0, 1, 1]).unwrap();
         approx(iou(&a, &b, false).unwrap(), 0.0);
     }
 
     #[test]
     fn half_overlap() {
         // a = {0,1}, b = {1,2} out of 4 pixels -> inter=1, union=3.
-        let a = Rle::from_dense(2, 2, &[1, 1, 0, 0]);
-        let b = Rle::from_dense(2, 2, &[0, 1, 1, 0]);
+        let a = Rle::from_dense(2, 2, &[1, 1, 0, 0]).unwrap();
+        let b = Rle::from_dense(2, 2, &[0, 1, 1, 0]).unwrap();
         approx(iou(&a, &b, false).unwrap(), 1.0 / 3.0);
     }
 
     #[test]
     fn crowd_scores_intersection_over_a_area() {
         // a is fully inside the crowd region b, but b is much larger.
-        let a = Rle::from_dense(4, 1, &[1, 1, 0, 0]);
-        let b = Rle::from_dense(4, 1, &[1, 1, 1, 1]);
+        let a = Rle::from_dense(4, 1, &[1, 1, 0, 0]).unwrap();
+        let b = Rle::from_dense(4, 1, &[1, 1, 1, 1]).unwrap();
         approx(iou(&a, &b, true).unwrap(), 1.0); // inter=2, area(a)=2
         approx(iou(&a, &b, false).unwrap(), 0.5); // inter=2, union=4
     }
@@ -513,10 +533,10 @@ mod tests {
 
     #[test]
     fn iou_matrix_shape_and_crowd_column() {
-        let a = vec![Rle::from_dense(2, 2, &[1, 1, 0, 0])];
+        let a = vec![Rle::from_dense(2, 2, &[1, 1, 0, 0]).unwrap()];
         let b = vec![
-            Rle::from_dense(2, 2, &[1, 1, 0, 0]),
-            Rle::from_dense(2, 2, &[1, 1, 1, 1]),
+            Rle::from_dense(2, 2, &[1, 1, 0, 0]).unwrap(),
+            Rle::from_dense(2, 2, &[1, 1, 1, 1]).unwrap(),
         ];
         let m = iou_matrix(&a, &b, Some(&[false, true])).unwrap();
         assert_eq!(m.len(), 1);
@@ -546,6 +566,19 @@ mod tests {
     }
 
     #[test]
+    fn new_rejects_dimensions_that_overflow_u64() {
+        // h * w overflows u64 outright; must error, not panic (debug) or
+        // silently wrap to a wrong "expected" value (release).
+        assert!(Rle::new(1 << 40, 1 << 40, vec![]).is_err());
+    }
+
+    #[test]
+    fn from_dense_rejects_length_mismatch() {
+        // 3 elements can never cover a claimed 10 * 1 = 10 pixels.
+        assert!(Rle::from_dense(10, 1, &[0, 1, 0]).is_err());
+    }
+
+    #[test]
     fn from_compressed_rejects_invalid_byte() {
         // '!' (0x21) is outside the valid 48..=111 packed-value alphabet.
         assert!(Rle::from_compressed(2, 2, "!").is_err());
@@ -567,8 +600,18 @@ mod tests {
     }
 
     #[test]
+    fn from_compressed_rejects_oversized_signed_run_length_group() {
+        // 12 continuation-flagged bytes ('P' - 48 = 0x20, the continuation
+        // bit alone) followed by a terminating byte with the sign bit set
+        // ('@' - 48 = 0x10) pushes the post-increment k to 13, so the
+        // sign-extension shift (5 * 13 = 65) must be rejected, not panic.
+        let malformed = format!("{}@", "P".repeat(12));
+        assert!(Rle::from_compressed(100, 1, &malformed).is_err());
+    }
+
+    #[test]
     fn bbox_of_empty_mask_is_zero() {
-        let empty = Rle::from_dense(4, 4, &[0u8; 16]);
+        let empty = Rle::from_dense(4, 4, &[0u8; 16]).unwrap();
         assert_eq!(empty.bbox(), (0.0, 0.0, 0.0, 0.0));
     }
 
@@ -583,38 +626,38 @@ mod tests {
             0, 0, 0, 0, // column 2
             0, 0, 1, 0, // column 3
         ];
-        let rle = Rle::from_dense(4, 4, &column_major);
+        let rle = Rle::from_dense(4, 4, &column_major).unwrap();
         assert_eq!(rle.bbox(), (1.0, 1.0, 4.0, 3.0)); // xyxy = xywh (1,1,3,2) + 1 on the max end
     }
 
     #[test]
     fn bbox_full_mask_covers_everything() {
-        let rle = Rle::from_dense(3, 5, &[1u8; 15]);
+        let rle = Rle::from_dense(3, 5, &[1u8; 15]).unwrap();
         assert_eq!(rle.bbox(), (0.0, 0.0, 5.0, 3.0));
     }
 
     #[test]
     fn merge_union_of_two_masks() {
         // a = {0,1}, b = {1,2} (row-major, 1x4) -> union = {0,1,2}.
-        let a = Rle::from_dense(4, 1, &[1, 1, 0, 0]);
-        let b = Rle::from_dense(4, 1, &[0, 1, 1, 0]);
+        let a = Rle::from_dense(4, 1, &[1, 1, 0, 0]).unwrap();
+        let b = Rle::from_dense(4, 1, &[0, 1, 1, 0]).unwrap();
         let union = merge(&[a, b], false).unwrap();
         assert_eq!(union.to_dense(), vec![1, 1, 1, 0]);
     }
 
     #[test]
     fn merge_intersection_of_two_masks() {
-        let a = Rle::from_dense(4, 1, &[1, 1, 0, 0]);
-        let b = Rle::from_dense(4, 1, &[0, 1, 1, 0]);
+        let a = Rle::from_dense(4, 1, &[1, 1, 0, 0]).unwrap();
+        let b = Rle::from_dense(4, 1, &[0, 1, 1, 0]).unwrap();
         let inter = merge(&[a, b], true).unwrap();
         assert_eq!(inter.to_dense(), vec![0, 1, 0, 0]);
     }
 
     #[test]
     fn merge_of_three_masks() {
-        let a = Rle::from_dense(3, 1, &[1, 0, 0]);
-        let b = Rle::from_dense(3, 1, &[0, 1, 0]);
-        let c = Rle::from_dense(3, 1, &[0, 0, 1]);
+        let a = Rle::from_dense(3, 1, &[1, 0, 0]).unwrap();
+        let b = Rle::from_dense(3, 1, &[0, 1, 0]).unwrap();
+        let c = Rle::from_dense(3, 1, &[0, 0, 1]).unwrap();
         let union = merge(&[a, b, c], false).unwrap();
         assert_eq!(union.to_dense(), vec![1, 1, 1]);
     }
@@ -628,16 +671,28 @@ mod tests {
     }
 
     #[test]
+    fn merge_of_multiple_empty_masks_is_empty_mask() {
+        // Regression: merge(&[]) can return a 0x0 Rle with empty counts,
+        // which pairwise_merge can't walk (it indexes counts[0]). Merging
+        // that result with itself must short-circuit before reaching it.
+        let empty = merge(&[], false).unwrap();
+        let merged = merge(&[empty.clone(), empty], false).unwrap();
+        assert_eq!(merged.h(), 0);
+        assert_eq!(merged.w(), 0);
+        assert_eq!(merged.area(), 0);
+    }
+
+    #[test]
     fn merge_of_one_mask_is_itself() {
-        let a = Rle::from_dense(2, 2, &[1, 0, 0, 1]);
+        let a = Rle::from_dense(2, 2, &[1, 0, 0, 1]).unwrap();
         let merged = merge(std::slice::from_ref(&a), false).unwrap();
         assert_eq!(merged, a);
     }
 
     #[test]
     fn merge_size_mismatch_errors() {
-        let a = Rle::from_dense(2, 2, &[1, 0, 0, 1]);
-        let b = Rle::from_dense(3, 3, &[0u8; 9]);
+        let a = Rle::from_dense(2, 2, &[1, 0, 0, 1]).unwrap();
+        let b = Rle::from_dense(3, 3, &[0u8; 9]).unwrap();
         assert!(merge(&[a, b], false).is_err());
     }
 }

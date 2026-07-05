@@ -107,11 +107,20 @@ def test_mask_iou_rejects_malformed_dict_instead_of_hanging() -> None:
         ("!", "invalid byte"),  # outside the valid packed-value alphabet
         ("o" * 20, "oversized run-length group"),  # never sets the stop bit
         ("5", "RLE counts cover"),  # decodes fine but under-covers h * w
+        # 12 continuation bytes + 1 terminating byte with the sign bit set
+        # pushes the post-increment group count to 13, overflowing the
+        # sign-extension shift (5 * 13 = 65) if not rejected first.
+        ("P" * 12 + "@", "oversized signed run-length group"),
     ],
 )
 def test_mask_from_coco_rejects_malformed_strings(counts: str, match: str) -> None:
     with pytest.raises(ValueError, match=match):
-        motrics.Mask.from_coco((10, 1), counts)
+        motrics.Mask.from_coco((100, 1), counts)
+
+
+def test_mask_new_rejects_dimensions_that_overflow() -> None:
+    with pytest.raises(ValueError, match="overflows"):
+        motrics.Mask((2**32, 2**32), [])
 
 
 @pytest.mark.parametrize("shape", [(1, 1), (5, 5), (17, 9), (64, 48), (100, 137)])
@@ -169,6 +178,16 @@ def test_mask_merge_of_empty_list_is_empty_mask() -> None:
     empty = motrics.mask_merge([])
     assert empty.size == (0, 0)
     assert empty.area() == 0
+
+
+def test_mask_merge_of_multiple_empty_masks_is_empty_mask() -> None:
+    # Regression: merge([]) can return a 0x0 mask with empty counts, which
+    # the pairwise merge walk can't index into. Merging that result with
+    # itself must not crash.
+    empty = motrics.mask_merge([])
+    merged = motrics.mask_merge([empty, motrics.mask_merge([])])
+    assert merged.size == (0, 0)
+    assert merged.area() == 0
 
 
 def test_mask_merge_size_mismatch_raises() -> None:

@@ -351,7 +351,7 @@ fn mask_encode(bitmap: PyReadonlyArray2<u8>) -> PyResult<Mask> {
         }
     }
     Ok(Mask {
-        rle: mask::Rle::from_dense(h, w, &bits),
+        rle: mask::Rle::from_dense(h, w, &bits).map_err(PyValueError::new_err)?,
     })
 }
 
