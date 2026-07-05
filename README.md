@@ -1,13 +1,18 @@
-# motrics
+<h1 align="center">motrics</h1>
 
-[![CI](https://github.com/kevinconka/motrics/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinconka/motrics/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/motrics)](https://pypi.org/project/motrics/)
-[![License](https://img.shields.io/github/license/kevinconka/motrics)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+<p align="center">
+  <em>An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
+  (MOTA/MOTP), Identity (IDF1), and HOTA, with an ergonomic Python API.</em>
+</p>
 
-An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
-(MOTA/MOTP), Identity (IDF1), and HOTA, with an ergonomic Python API.
+<p align="center">
+  <a href="https://github.com/kevinconka/motrics/actions/workflows/ci.yml"><img src="https://github.com/kevinconka/motrics/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/kevinconka/motrics"><img src="https://codecov.io/gh/kevinconka/motrics/graph/badge.svg" alt="codecov"></a>
+  <a href="https://pypi.org/project/motrics/"><img src="https://img.shields.io/pypi/v/motrics" alt="PyPI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/kevinconka/motrics" alt="License"></a>
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+"></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
+</p>
 
 ## Highlights
 
