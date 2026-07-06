@@ -1,11 +1,9 @@
 name: Tag release
 
 # Tags Cargo.toml's current version if it isn't tagged yet, creates a GitHub
-# Release with auto-generated notes (grouped by merged PRs), and dispatches
-# release.yml at that tag to build wheels and publish to PyPI. Dispatches
-# explicitly rather than relying on the tag push to trigger it: pushes made
-# with GITHUB_TOKEN can't trigger other workflows, but workflow_dispatch is
-# an explicit exception to that rule, so no PAT is needed here.
+# Release with auto-generated notes, then explicitly dispatches release.yml
+# (via its workflow_dispatch trigger) to build wheels and publish to PyPI —
+# GITHUB_TOKEN pushes can't trigger workflows on their own.
 #
 # To cut a release: bump `version` in Cargo.toml in a normal PR and merge it.
 
