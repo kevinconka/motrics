@@ -3,21 +3,9 @@ name: Tag release
 # Tags Cargo.toml's current version if it isn't tagged yet, and creates a
 # GitHub Release with auto-generated notes (grouped by merged PRs). Pushing
 # the vX.Y.Z tag triggers release.yml, which builds wheels and publishes to
-# PyPI. RELEASE_PLZ_TOKEN (a fine-grained PAT, name kept from a since-removed
-# release-plz setup) is needed for that tag push to trigger release.yml —
-# GitHub's default token can't trigger other workflows.
+# PyPI.
 #
 # To cut a release: bump `version` in Cargo.toml in a normal PR and merge it.
-# No changelog to maintain — GitHub's own "generate release notes" fills in
-# the release body from merged PRs.
-#
-# Previously used release-plz for this, including an automated "release
-# vX.Y.Z" PR step. Dropped: release-plz can't compute a version bump for a
-# crate that's never been published to any cargo registry — it has no
-# baseline to diff against, so that step silently no-op'd on every push
-# instead of opening a PR. The tag/release step it did work reliably, but by
-# that point it was a thin wrapper around a few `git`/`gh` calls, not worth a
-# pinned third-party action + Rust toolchain install to run it.
 
 on:
   push:
@@ -37,11 +25,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          # persist-credentials (default true) wires `git push` to use this
-          # token via the credential helper. Must be RELEASE_PLZ_TOKEN, not
-          # the default GITHUB_TOKEN — GitHub blocks GITHUB_TOKEN-authored
-          # pushes from triggering other workflows, which would silently
-          # stop the tag push from kicking off release.yml.
+          # Must be a PAT, not GITHUB_TOKEN: pushes made with the default
+          # token can't trigger other workflows, so release.yml would never
+          # fire off the tag below.
           token: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Tag and release if Cargo.toml's version isn't tagged yet
         env:
