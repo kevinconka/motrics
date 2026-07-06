@@ -1,9 +1,11 @@
 name: Tag release
 
-# Tags Cargo.toml's current version if it isn't tagged yet, and creates a
-# GitHub Release with auto-generated notes (grouped by merged PRs). Pushing
-# the vX.Y.Z tag triggers release.yml, which builds wheels and publishes to
-# PyPI.
+# Tags Cargo.toml's current version if it isn't tagged yet, creates a GitHub
+# Release with auto-generated notes (grouped by merged PRs), and dispatches
+# release.yml at that tag to build wheels and publish to PyPI. Dispatches
+# explicitly rather than relying on the tag push to trigger it: pushes made
+# with GITHUB_TOKEN can't trigger other workflows, but workflow_dispatch is
+# an explicit exception to that rule, so no PAT is needed here.
 #
 # To cut a release: bump `version` in Cargo.toml in a normal PR and merge it.
 
@@ -21,17 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          # Must be a PAT, not GITHUB_TOKEN: pushes made with the default
-          # token can't trigger other workflows, so release.yml would never
-          # fire off the tag below.
-          token: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Tag and release if Cargo.toml's version isn't tagged yet
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           version=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
@@ -43,3 +42,4 @@ jobs:
           git tag "$tag"
           git push origin "$tag"
           gh release create "$tag" --repo "${{ github.repository }}" --generate-notes
+          gh workflow run release.yml --repo "${{ github.repository }}" --ref "$tag"
