@@ -37,7 +37,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          persist-credentials: false
+          # persist-credentials (default true) wires `git push` to use this
+          # token via the credential helper. Must be RELEASE_PLZ_TOKEN, not
+          # the default GITHUB_TOKEN — GitHub blocks GITHUB_TOKEN-authored
+          # pushes from triggering other workflows, which would silently
+          # stop the tag push from kicking off release.yml.
+          token: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Tag and release if Cargo.toml's version isn't tagged yet
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
