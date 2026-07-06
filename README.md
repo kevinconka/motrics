@@ -271,8 +271,17 @@ it yourself.
         matrix for the `compute_*_from_similarity` functions. Also adds
         `match_masks`, a mask-IoU sibling to `match_boxes` sharing the same
         Hungarian/greedy assignment core.
-  - [ ] BDD-MOTS / DAVIS — same mask kernel, different dataset-specific
-        preprocessing rules.
+  - [x] DAVIS (unsupervised) — `load_davis` + `preprocess_davis` read the
+        indexed-PNG mask format and pair a ground-truth and tracker sequence
+        into the mask-IoU similarity `compute_*_from_similarity` take, matching
+        TrackEval's `DAVIS`. Single "general" class, no detection removal; void
+        regions are parsed but — faithful to TrackEval, which scores before
+        re-masking the (metric-unused) tracker dets — do not change the
+        numbers, validated against TrackEval's own `get_preprocessed_seq_data`
+        and metric classes.
+  - [ ] BDD100K — box-based in TrackEval (its `BDD100K` uses box IoU, not the
+        mask kernel): JSON ingest, eight classes, crowd-ignore removal. Reuses
+        the existing box-IoU path rather than the mask kernel above.
   - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
 
 </details>
