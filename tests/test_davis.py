@@ -120,6 +120,17 @@ def test_preprocess_davis_matches_trackeval(tmp_path: Path) -> None:
     assert [len(f) for f in pred_ids] == [3, 2]
 
 
+def test_load_davis_rejects_non_indexed_png(tmp_path: Path) -> None:
+    from PIL import Image
+
+    seq_dir = tmp_path / _SEQ
+    seq_dir.mkdir(parents=True)
+    seq_dir.joinpath("notes.txt").write_text("stray file, must be ignored")
+    Image.new("RGB", (_W, _H)).save(seq_dir / "00000.png")
+    with pytest.raises(ValueError, match="single-channel"):
+        motrics.load_davis(seq_dir)
+
+
 def test_preprocess_davis_frame_count_mismatch() -> None:
     gt = [([1], [motrics.Mask((1, 1), [0, 1])])]
     with pytest.raises(ValueError, match="frame count mismatch"):

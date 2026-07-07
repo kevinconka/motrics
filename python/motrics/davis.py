@@ -61,8 +61,17 @@ def _read_indexed_pngs(seq_dir: str | PathLike[str]) -> list[npt.NDArray[np.inte
         ) from exc
 
     seq_dir = str(seq_dir)
-    names = sorted(listdir(seq_dir))
-    return [np.array(Image.open(join(seq_dir, name))) for name in names]
+    names = sorted(n for n in listdir(seq_dir) if n.lower().endswith(".png"))
+    frames = []
+    for name in names:
+        frame = np.array(Image.open(join(seq_dir, name)))
+        if frame.ndim != 2:
+            raise ValueError(
+                f"{name}: expected an indexed (single-channel) PNG mask, got an "
+                f"array with shape {frame.shape}; a pixel value is the object id"
+            )
+        frames.append(frame)
+    return frames
 
 
 def _split_frame(frame: npt.NDArray[np.integer]) -> tuple[list[int], list[Mask]]:
