@@ -6,6 +6,8 @@ This package re-exports the public API so users only ever import from
 """
 
 from motrics._motrics import (
+    Accumulator,
+    AccumulatorResult,
     ClearMetrics,
     EvaluationResult,
     HotaMetrics,
@@ -49,6 +51,8 @@ from motrics.motchallenge import (
 )
 
 __all__ = [
+    "Accumulator",
+    "AccumulatorResult",
     "ClearMetrics",
     "EvaluationResult",
     "Frames",

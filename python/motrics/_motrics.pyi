@@ -455,3 +455,72 @@ def evaluate(
     ``compute_identity``, and ``compute_hota`` separately would do).
     """
     ...
+
+class AccumulatorResult:
+    """CLEAR and Identity read from a streaming :class:`Accumulator`."""
+
+    @property
+    def clear(self) -> ClearMetrics:
+        """CLEAR MOT metrics (MOTA, MOTP, FP, FN, ID switches)."""
+
+    @property
+    def identity(self) -> IdentityMetrics:
+        """Identity metrics (IDF1, IDP, IDR)."""
+
+    def __repr__(self) -> str: ...
+
+class Accumulator:
+    """A streaming CLEAR + Identity accumulator.
+
+    Fold in one frame at a time with :meth:`update` (boxes) or
+    :meth:`update_from_similarity` (precomputed scores), then read the metrics
+    with :meth:`compute` — the online/large-sequence shape, where the whole
+    sequence is never held in memory. HOTA is not offered here: its alpha
+    sweep is inherently a whole-sequence computation, so use :func:`evaluate`
+    or :func:`compute_hota` for it.
+    """
+
+    def __init__(
+        self, iou_threshold: float = 0.5, box_format: BoxFormat = "xyxy"
+    ) -> None: ...
+    @property
+    def num_frames(self) -> int:
+        """Number of frames folded in so far."""
+
+    def update(
+        self,
+        gt_ids: Sequence[int],
+        gt_boxes: Boxes,
+        pred_ids: Sequence[int],
+        pred_boxes: Boxes,
+    ) -> None:
+        """Fold one frame in.
+
+        ``gt_ids``/``gt_boxes`` (and ``pred_ids``/``pred_boxes``) must have
+        equal length; each boxes argument is a sequence of 4-tuples or a
+        contiguous ``(N, 4)`` float64 NumPy array, in this accumulator's
+        ``box_format``.
+        """
+        ...
+
+    def update_from_similarity(
+        self,
+        gt_ids: Sequence[int],
+        pred_ids: Sequence[int],
+        similarity: Sequence[Sequence[float]],
+    ) -> None:
+        """Fold one frame in from a precomputed similarity matrix.
+
+        ``similarity[i][j]`` scores ``gt_ids[i]`` against ``pred_ids[j]``; it
+        must be ``len(gt_ids)`` rows by ``len(pred_ids)`` columns.
+        """
+        ...
+
+    def compute(self) -> AccumulatorResult:
+        """Finalize CLEAR and Identity from everything folded in so far.
+
+        May be called at any point and does not consume the accumulator.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
