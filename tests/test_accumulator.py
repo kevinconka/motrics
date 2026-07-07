@@ -138,3 +138,20 @@ def test_similarity_shape_mismatch_raises() -> None:
         acc.update_from_similarity([1, 2], [3], [[0.9]])
     with pytest.raises(ValueError, match="similarity row 0 has 1 columns, expected 2"):
         acc.update_from_similarity([1], [3, 4], [[0.9]])
+
+
+def test_invalid_box_format_raises() -> None:
+    with pytest.raises(ValueError, match="unknown box_format"):
+        motrics.Accumulator(box_format="polar")
+
+
+def test_repr() -> None:
+    acc = motrics.Accumulator()
+    acc.update([1], [(0.0, 0.0, 10.0, 10.0)], [1], [(0.0, 0.0, 10.0, 10.0)])
+    assert repr(acc) == "Accumulator(num_frames=1)"
+
+    result = acc.compute()
+    text = repr(result)
+    assert text.startswith("AccumulatorResult(")
+    assert "clear=" in text
+    assert "identity=" in text
