@@ -142,7 +142,7 @@ def test_similarity_shape_mismatch_raises() -> None:
 
 def test_invalid_box_format_raises() -> None:
     with pytest.raises(ValueError, match="unknown box_format"):
-        motrics.Accumulator(box_format="polar")
+        motrics.Accumulator(box_format="polar")  # ty: ignore[invalid-argument-type]
 
 
 def test_repr() -> None:
