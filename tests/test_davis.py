@@ -120,6 +120,12 @@ def test_preprocess_davis_matches_trackeval(tmp_path: Path) -> None:
     assert [len(f) for f in pred_ids] == [3, 2]
 
 
+def test_preprocess_davis_frame_count_mismatch() -> None:
+    gt = [([1], [motrics.Mask((1, 1), [0, 1])])]
+    with pytest.raises(ValueError, match="frame count mismatch"):
+        motrics.preprocess_davis(gt, [])
+
+
 def test_davis_metrics_match_trackeval(tmp_path: Path) -> None:
     gt_ids, pred_ids, similarity = _motrics_preprocessed(tmp_path)
     te_data = _trackeval_data(tmp_path / "te")
