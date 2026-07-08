@@ -149,55 +149,68 @@ fn finalize(mut m: ClearMetrics, motp_sum: f64) -> ClearMetrics {
     m
 }
 
-/// Compute CLEAR MOT metrics over a sequence of frames.
-pub fn compute_clear(frames: &[Frame], threshold: f64) -> ClearMetrics {
-    let mut m = ClearMetrics {
-        num_frames: frames.len(),
-        ..Default::default()
-    };
+/// Streaming CLEAR accumulator: fold frames in one at a time with
+/// [`ClearAccumulator::update`], then read MOTA/MOTP with
+/// [`ClearAccumulator::compute`]. Only bounded per-object state is kept (the
+/// last hypothesis id per gt object plus running counts), so memory does not
+/// grow with the number of frames. The batch [`compute_clear`] is a thin
+/// wrapper over this, so streaming and batch results are identical.
+#[derive(Debug, Default)]
+pub struct ClearAccumulator {
+    metrics: ClearMetrics,
     // Last hypothesis id each gt object was matched to (persists across gaps).
-    let mut last_pred_of_gt: HashMap<i64, i64> = HashMap::new();
-    let mut motp_sum = 0.0;
+    last_pred_of_gt: HashMap<i64, i64>,
+    motp_sum: f64,
+}
 
-    for frame in frames {
-        let sim = iou_matrix(frame.gt_boxes, frame.pred_boxes);
+impl ClearAccumulator {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Number of frames folded in so far.
+    pub fn num_frames(&self) -> usize {
+        self.metrics.num_frames
+    }
+
+    /// Fold one frame's precomputed similarity matrix into the running state.
+    pub fn update(&mut self, gt_ids: &[i64], pred_ids: &[i64], sim: &[Vec<f64>], threshold: f64) {
+        self.metrics.num_frames += 1;
         accumulate_frame(
-            frame.gt_ids,
-            frame.pred_ids,
-            &sim,
+            gt_ids,
+            pred_ids,
+            sim,
             threshold,
-            &mut last_pred_of_gt,
-            &mut motp_sum,
-            &mut m,
+            &mut self.last_pred_of_gt,
+            &mut self.motp_sum,
+            &mut self.metrics,
         );
     }
 
-    finalize(m, motp_sum)
+    /// Finalize MOTA/MOTP from the accumulated counts.
+    pub fn compute(&self) -> ClearMetrics {
+        finalize(self.metrics.clone(), self.motp_sum)
+    }
+}
+
+/// Compute CLEAR MOT metrics over a sequence of frames.
+pub fn compute_clear(frames: &[Frame], threshold: f64) -> ClearMetrics {
+    let mut acc = ClearAccumulator::new();
+    for frame in frames {
+        let sim = iou_matrix(frame.gt_boxes, frame.pred_boxes);
+        acc.update(frame.gt_ids, frame.pred_ids, &sim, threshold);
+    }
+    acc.compute()
 }
 
 /// Compute CLEAR MOT metrics from precomputed per-frame similarity matrices
 /// instead of boxes (e.g. for callers migrating from a distance-matrix API).
 pub fn compute_clear_from_similarity(frames: &[SimFrame], threshold: f64) -> ClearMetrics {
-    let mut m = ClearMetrics {
-        num_frames: frames.len(),
-        ..Default::default()
-    };
-    let mut last_pred_of_gt: HashMap<i64, i64> = HashMap::new();
-    let mut motp_sum = 0.0;
-
+    let mut acc = ClearAccumulator::new();
     for frame in frames {
-        accumulate_frame(
-            frame.gt_ids,
-            frame.pred_ids,
-            frame.similarity,
-            threshold,
-            &mut last_pred_of_gt,
-            &mut motp_sum,
-            &mut m,
-        );
+        acc.update(frame.gt_ids, frame.pred_ids, frame.similarity, threshold);
     }
-
-    finalize(m, motp_sum)
+    acc.compute()
 }
 
 #[cfg(test)]

@@ -192,7 +192,7 @@ it yourself.
 - [x] Benchmark & parity infrastructure vs **TrackEval** and **py-motmetrics**,
       on real MOTChallenge data, validated in CI.
   - [x] Zero-copy NumPy input path (see "broaden core inputs" below).
-- [ ] Replace TrackEval / py-motmetrics, not just benchmark against them:
+- [x] Replace TrackEval / py-motmetrics, not just benchmark against them:
   - [x] Precomputed-similarity core inputs (`compute_clear_from_similarity`,
         `compute_identity_from_similarity`) — the piece `compat.motmetrics`
         needed, and the first slice of "broaden core inputs" below.
@@ -221,14 +221,16 @@ it yourself.
       `compute_hota` called separately each build their own). The flat
       `compute_clear`/`compute_identity`/`compute_hota` functions are
       unchanged, for single-metric use.
-  - [ ] Streaming accumulator — `update()` per frame, `compute()` at the end,
-        the shape both py-motmetrics and torchmetrics use, for online
-        evaluation or sequences too large to hold fully in memory. Deferred:
-        HOTA's alpha sweep is naturally a whole-sequence batch computation,
-        so incrementalizing it correctly is real design work, not a thin
-        wrapper around the existing core — worth doing once the
-        dataset-adapter layer below has settled `Frames` as the shape
-        adapters produce, not before.
+  - [x] Streaming accumulator — `Accumulator.update()` per frame,
+        `compute()` at the end, the shape both py-motmetrics and torchmetrics
+        use, for online evaluation or sequences too large to hold fully in
+        memory. Covers CLEAR + Identity: both fold into bounded per-object
+        state (last hypothesis id per gt for CLEAR; per-track counts + a
+        co-occurrence map for Identity), so memory is independent of sequence
+        length. HOTA is excluded by design — its alpha sweep is a
+        whole-sequence computation, so it stays on the batch `evaluate()` /
+        `compute_hota` path. The batch functions now run through the same
+        accumulators, so streaming and batch results are bit-identical.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
       benchmark (ingest + preprocessing + similarity), added incrementally:
   - [x] DanceTrack — no adapter code needed. Its `gt.txt`/results format is

@@ -11,6 +11,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
+mod accumulator;
 mod assignment;
 mod boxes;
 mod clear;
@@ -864,6 +865,141 @@ fn evaluate(
     })
 }
 
+/// CLEAR and Identity read from a streaming [`Accumulator`] via
+/// [`Accumulator::compute`].
+#[pyclass(frozen)]
+struct AccumulatorResult {
+    /// CLEAR MOT metrics (MOTA, MOTP, FP, FN, ID switches).
+    #[pyo3(get)]
+    clear: Py<ClearMetrics>,
+    /// Identity metrics (IDF1, IDP, IDR).
+    #[pyo3(get)]
+    identity: Py<IdentityMetrics>,
+}
+
+#[pymethods]
+impl AccumulatorResult {
+    fn __repr__(&self, py: Python<'_>) -> String {
+        format!(
+            "AccumulatorResult(clear={}, identity={})",
+            self.clear.borrow(py).__repr__(),
+            self.identity.borrow(py).__repr__(),
+        )
+    }
+}
+
+/// A streaming CLEAR + Identity accumulator.
+///
+/// Fold in one frame at a time with [`Accumulator::update`] (boxes) or
+/// [`Accumulator::update_from_similarity`] (precomputed scores), then read the
+/// metrics with [`Accumulator::compute`] — the online/large-sequence shape,
+/// where the whole sequence is never held in memory. HOTA is not offered here:
+/// its alpha sweep is inherently a whole-sequence computation, so use
+/// [`evaluate`] or [`compute_hota`] for it.
+#[pyclass]
+struct Accumulator {
+    inner: accumulator::Accumulator,
+    format: BoxFormat,
+}
+
+#[pymethods]
+impl Accumulator {
+    /// `iou_threshold` is the match cutoff shared by both metrics; `box_format`
+    /// is `"xyxy"` (default) or `"xywh"`, applied to every `update` call.
+    #[new]
+    #[pyo3(signature = (iou_threshold=0.5, box_format="xyxy"))]
+    fn new(iou_threshold: f64, box_format: &str) -> PyResult<Self> {
+        Ok(Accumulator {
+            inner: accumulator::Accumulator::new(iou_threshold),
+            format: BoxFormat::parse(box_format)?,
+        })
+    }
+
+    /// Number of frames folded in so far.
+    #[getter]
+    fn num_frames(&self) -> usize {
+        self.inner.num_frames()
+    }
+
+    /// Fold one frame in. `gt_ids`/`gt_boxes` (and `pred_ids`/`pred_boxes`)
+    /// must have equal length; each boxes argument is a sequence of 4-tuples or
+    /// a contiguous `(N, 4)` float64 NumPy array, in this accumulator's
+    /// `box_format`.
+    #[pyo3(signature = (gt_ids, gt_boxes, pred_ids, pred_boxes))]
+    fn update(
+        &mut self,
+        gt_ids: Vec<i64>,
+        gt_boxes: PyBoxes,
+        pred_ids: Vec<i64>,
+        pred_boxes: PyBoxes,
+    ) -> PyResult<()> {
+        let gt_boxes = gt_boxes.as_boxes(self.format)?;
+        let pred_boxes = pred_boxes.as_boxes(self.format)?;
+        if gt_ids.len() != gt_boxes.len() {
+            return Err(PyValueError::new_err(format!(
+                "gt_ids and gt_boxes length mismatch ({} vs {})",
+                gt_ids.len(),
+                gt_boxes.len()
+            )));
+        }
+        if pred_ids.len() != pred_boxes.len() {
+            return Err(PyValueError::new_err(format!(
+                "pred_ids and pred_boxes length mismatch ({} vs {})",
+                pred_ids.len(),
+                pred_boxes.len()
+            )));
+        }
+        self.inner
+            .update(&gt_ids, gt_boxes.as_ref(), &pred_ids, pred_boxes.as_ref());
+        Ok(())
+    }
+
+    /// Fold one frame in from a precomputed similarity matrix instead of boxes.
+    /// `similarity[i][j]` scores `gt_ids[i]` against `pred_ids[j]`; it must be
+    /// `len(gt_ids)` rows by `len(pred_ids)` columns.
+    #[pyo3(signature = (gt_ids, pred_ids, similarity))]
+    fn update_from_similarity(
+        &mut self,
+        gt_ids: Vec<i64>,
+        pred_ids: Vec<i64>,
+        similarity: Vec<Vec<f64>>,
+    ) -> PyResult<()> {
+        if similarity.len() != gt_ids.len() {
+            return Err(PyValueError::new_err(format!(
+                "similarity has {} rows, expected {} (len(gt_ids))",
+                similarity.len(),
+                gt_ids.len()
+            )));
+        }
+        for (r, row) in similarity.iter().enumerate() {
+            if row.len() != pred_ids.len() {
+                return Err(PyValueError::new_err(format!(
+                    "similarity row {r} has {} columns, expected {} (len(pred_ids))",
+                    row.len(),
+                    pred_ids.len()
+                )));
+            }
+        }
+        self.inner
+            .update_from_similarity(&gt_ids, &pred_ids, &similarity);
+        Ok(())
+    }
+
+    /// Finalize CLEAR and Identity from everything folded in so far. May be
+    /// called at any point and does not consume the accumulator.
+    fn compute(&self, py: Python<'_>) -> PyResult<AccumulatorResult> {
+        let (clear, identity) = self.inner.compute();
+        Ok(AccumulatorResult {
+            clear: Py::new(py, ClearMetrics::from(clear))?,
+            identity: Py::new(py, IdentityMetrics::from(identity))?,
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Accumulator(num_frames={})", self.inner.num_frames())
+    }
+}
+
 /// The `motrics._motrics` extension module.
 #[pymodule]
 fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -889,6 +1025,8 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_hota, m)?)?;
     m.add_function(wrap_pyfunction!(compute_hota_from_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
+    m.add_class::<Accumulator>()?;
+    m.add_class::<AccumulatorResult>()?;
     m.add_class::<Matching>()?;
     m.add_class::<ClearMetrics>()?;
     m.add_class::<IdentityMetrics>()?;

@@ -41,48 +41,82 @@ pub struct IdentityMetrics {
 // arithmetic cannot overflow.
 const FORBIDDEN: f64 = 1e18;
 
-/// Assign dense indices to arbitrary ids in order of first appearance.
-fn index_ids<'a>(id_lists: impl Iterator<Item = &'a [i64]>) -> HashMap<i64, usize> {
-    let mut index = HashMap::new();
-    for ids in id_lists {
-        for &id in ids {
-            let next = index.len();
-            index.entry(id).or_insert(next);
-        }
+/// Intern an id into `index`, assigning the next dense index on first sight
+/// (in order of appearance) and growing `count` to match. Returns the id's
+/// dense index.
+fn intern(index: &mut HashMap<i64, usize>, count: &mut Vec<usize>, id: i64) -> usize {
+    let next = index.len();
+    let idx = *index.entry(id).or_insert(next);
+    if idx == count.len() {
+        count.push(0);
     }
-    index
+    idx
 }
 
-/// Accumulate per-track detection counts and per-pair co-occurrence counts
-/// ("potential" IDTP) from `gt_ids`/`pred_ids` scored against `sim`. Shared by
-/// the boxes-based and precomputed-similarity entry points below.
-#[allow(clippy::too_many_arguments)]
-fn accumulate_frame(
-    gt_ids: &[i64],
-    pred_ids: &[i64],
-    sim: &[Vec<f64>],
-    threshold: f64,
-    gt_index: &HashMap<i64, usize>,
-    pred_index: &HashMap<i64, usize>,
-    gt_count: &mut [usize],
-    pred_count: &mut [usize],
-    potential: &mut [Vec<usize>],
-) {
-    for &id in gt_ids {
-        gt_count[gt_index[&id]] += 1;
+/// Streaming Identity accumulator: fold frames in one at a time with
+/// [`IdentityAccumulator::update`], then solve the global assignment with
+/// [`IdentityAccumulator::compute`]. Only per-track counts and per-pair
+/// co-occurrence ("potential" IDTP) are kept — both bounded by the number of
+/// distinct ids, not the number of frames — so memory does not grow with
+/// sequence length. The batch [`compute_identity`] is a thin wrapper over
+/// this, so streaming and batch results are identical.
+#[derive(Debug, Default)]
+pub struct IdentityAccumulator {
+    num_frames: usize,
+    gt_index: HashMap<i64, usize>,
+    pred_index: HashMap<i64, usize>,
+    gt_count: Vec<usize>,
+    pred_count: Vec<usize>,
+    // Frames where gt `i` and pred `j` co-occur with similarity >= threshold.
+    potential: HashMap<(usize, usize), usize>,
+}
+
+impl IdentityAccumulator {
+    pub fn new() -> Self {
+        Self::default()
     }
-    for &id in pred_ids {
-        pred_count[pred_index[&id]] += 1;
-    }
-    if gt_ids.is_empty() || pred_ids.is_empty() {
-        return;
-    }
-    for (gi, &gid) in gt_ids.iter().enumerate() {
-        for (pj, &pid) in pred_ids.iter().enumerate() {
-            if sim[gi][pj] >= threshold {
-                potential[gt_index[&gid]][pred_index[&pid]] += 1;
+
+    /// Fold one frame's precomputed similarity matrix into the running state.
+    pub fn update(&mut self, gt_ids: &[i64], pred_ids: &[i64], sim: &[Vec<f64>], threshold: f64) {
+        self.num_frames += 1;
+        for &id in gt_ids {
+            let i = intern(&mut self.gt_index, &mut self.gt_count, id);
+            self.gt_count[i] += 1;
+        }
+        for &id in pred_ids {
+            let j = intern(&mut self.pred_index, &mut self.pred_count, id);
+            self.pred_count[j] += 1;
+        }
+        if gt_ids.is_empty() || pred_ids.is_empty() {
+            return;
+        }
+        for (gi, &gid) in gt_ids.iter().enumerate() {
+            let i = self.gt_index[&gid];
+            for (pj, &pid) in pred_ids.iter().enumerate() {
+                if sim[gi][pj] >= threshold {
+                    let j = self.pred_index[&pid];
+                    *self.potential.entry((i, j)).or_insert(0) += 1;
+                }
             }
         }
+    }
+
+    /// Solve the global assignment and derive IDF1/IDP/IDR.
+    pub fn compute(&self) -> IdentityMetrics {
+        let n_g = self.gt_index.len();
+        let n_t = self.pred_index.len();
+        let mut potential = vec![vec![0usize; n_t]; n_g];
+        for (&(i, j), &c) in &self.potential {
+            potential[i][j] = c;
+        }
+        finalize(
+            self.num_frames,
+            n_g,
+            n_t,
+            &self.gt_count,
+            &self.pred_count,
+            &potential,
+        )
     }
 }
 
@@ -191,65 +225,26 @@ fn finalize(
 
 /// Compute Identity metrics (IDF1/IDP/IDR) over a sequence of frames.
 pub fn compute_identity(frames: &[Frame], threshold: f64) -> IdentityMetrics {
-    let gt_index = index_ids(frames.iter().map(|f| f.gt_ids));
-    let pred_index = index_ids(frames.iter().map(|f| f.pred_ids));
-    let n_g = gt_index.len();
-    let n_t = pred_index.len();
-
-    let mut gt_count = vec![0usize; n_g];
-    let mut pred_count = vec![0usize; n_t];
-    // potential[i][j] = frames where gt i and pred j co-occur with IoU >= threshold.
-    let mut potential = vec![vec![0usize; n_t]; n_g];
-
+    let mut acc = IdentityAccumulator::new();
     for f in frames {
         let sim = if f.gt_ids.is_empty() || f.pred_ids.is_empty() {
             Vec::new()
         } else {
             iou_matrix(f.gt_boxes, f.pred_boxes)
         };
-        accumulate_frame(
-            f.gt_ids,
-            f.pred_ids,
-            &sim,
-            threshold,
-            &gt_index,
-            &pred_index,
-            &mut gt_count,
-            &mut pred_count,
-            &mut potential,
-        );
+        acc.update(f.gt_ids, f.pred_ids, &sim, threshold);
     }
-
-    finalize(frames.len(), n_g, n_t, &gt_count, &pred_count, &potential)
+    acc.compute()
 }
 
 /// Compute Identity metrics from precomputed per-frame similarity matrices
 /// instead of boxes (e.g. for callers migrating from a distance-matrix API).
 pub fn compute_identity_from_similarity(frames: &[SimFrame], threshold: f64) -> IdentityMetrics {
-    let gt_index = index_ids(frames.iter().map(|f| f.gt_ids));
-    let pred_index = index_ids(frames.iter().map(|f| f.pred_ids));
-    let n_g = gt_index.len();
-    let n_t = pred_index.len();
-
-    let mut gt_count = vec![0usize; n_g];
-    let mut pred_count = vec![0usize; n_t];
-    let mut potential = vec![vec![0usize; n_t]; n_g];
-
+    let mut acc = IdentityAccumulator::new();
     for f in frames {
-        accumulate_frame(
-            f.gt_ids,
-            f.pred_ids,
-            f.similarity,
-            threshold,
-            &gt_index,
-            &pred_index,
-            &mut gt_count,
-            &mut pred_count,
-            &mut potential,
-        );
+        acc.update(f.gt_ids, f.pred_ids, f.similarity, threshold);
     }
-
-    finalize(frames.len(), n_g, n_t, &gt_count, &pred_count, &potential)
+    acc.compute()
 }
 
 #[cfg(test)]
