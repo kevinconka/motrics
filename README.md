@@ -281,9 +281,15 @@ it yourself.
         re-masking the (metric-unused) tracker dets — do not change the
         numbers, validated against TrackEval's own `get_preprocessed_seq_data`
         and metric classes.
-  - [ ] BDD100K — box-based in TrackEval (its `BDD100K` uses box IoU, not the
-        mask kernel): JSON ingest, eight classes, crowd-ignore removal. Reuses
-        the existing box-IoU path rather than the mask kernel above.
+  - [x] BDD100K — `load_bdd100k`/`load_bdd100k_gt` + `preprocess_bdd100k`
+        replicate TrackEval's `BDD100K` preprocessing: JSON ingest, the eight
+        classes evaluated separately, crowd-marked and distractor-category
+        (`other person`/`trailer`/`other vehicle`) ground truth pulled out as
+        ignore regions, and unmatched predictions mostly inside a crowd-ignore
+        region dropped. Box-based (box IoU, not the mask kernel), so it reuses
+        the existing box-IoU path and returns
+        `(gt_ids, gt_boxes, pred_ids, pred_boxes)` for the `compute_*`
+        functions; validated against TrackEval's own `get_preprocessed_seq_data`.
   - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
 
 </details>
