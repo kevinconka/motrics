@@ -187,3 +187,25 @@ def test_preprocess_bdd100k_matches_trackeval(tmp_path: Path) -> None:
 def test_preprocess_bdd100k_rejects_invalid_class() -> None:
     with pytest.raises(ValueError, match="unknown class"):
         motrics.preprocess_bdd100k({}, {}, "trailer")
+
+
+def test_unknown_category_labels_are_dropped(tmp_path: Path) -> None:
+    frames = [
+        {
+            "index": 0,
+            "labels": [
+                _label(1, "pedestrian", _box(0, 0, 10, 30)),
+                _label(2, "traffic light", _box(40, 0, 50, 30)),  # not a track class
+            ],
+        }
+    ]
+    gt_path, pred_path = tmp_path / "gt.json", tmp_path / "pred.json"
+    gt_path.write_text(json.dumps(frames), encoding="utf-8")
+    pred_path.write_text(json.dumps(frames), encoding="utf-8")
+
+    gt, ignore = motrics.load_bdd100k_gt(gt_path)
+    pred = motrics.load_bdd100k(pred_path)
+    # The unknown category is neither a kept det nor a crowd-ignore region.
+    assert gt == {0: ([1], [(0.0, 0.0, 10.0, 30.0)], [1])}
+    assert ignore == {0: []}
+    assert pred == {0: ([1], [(0.0, 0.0, 10.0, 30.0)], [1])}
