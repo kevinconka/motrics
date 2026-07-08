@@ -35,6 +35,7 @@ from motrics._motrics import (
     match_masks,
     version,
 )
+from motrics.bdd100k import load_bdd100k, load_bdd100k_gt, preprocess_bdd100k
 from motrics.davis import load_davis, preprocess_davis
 from motrics.frames import Frames, evaluate
 from motrics.kitti import load_kitti, load_kitti_gt, preprocess_kitti
@@ -72,6 +73,8 @@ __all__ = [
     "iou",
     "iou_matrix",
     "is_debug_build",
+    "load_bdd100k",
+    "load_bdd100k_gt",
     "load_davis",
     "load_kitti",
     "load_kitti_gt",
@@ -88,6 +91,7 @@ __all__ = [
     "mask_to_bbox",
     "match_boxes",
     "match_masks",
+    "preprocess_bdd100k",
     "preprocess_davis",
     "preprocess_kitti",
     "preprocess_kitti_mots",
