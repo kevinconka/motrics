@@ -231,6 +231,26 @@ it yourself.
         whole-sequence computation, so it stays on the batch `evaluate()` /
         `compute_hota` path. The batch functions now run through the same
         accumulators, so streaming and batch results are bit-identical.
+- [ ] Metric completeness — the metric field set a drop-in replacement needs to
+      reproduce a full MOTChallenge results table, tracked separately from the
+      dataset adapters below since it's core-metric work, not ingest:
+  - [ ] Extended CLEAR fields — `MT`/`PT`/`ML` (mostly-/partially-/mostly-lost
+        trajectory counts), `Frag` (fragmentations), and the derived
+        `MODA`/`sMOTA`/`CLR_Re`/`CLR_Pr`/`MOTAL` scores TrackEval's `CLEAR`
+        reports. The core `ClearMetrics` computes MOTA/MOTP/TP/FP/FN/IDSW today;
+        these need per-trajectory bookkeeping it doesn't yet do. Unblocks the
+        `MT`/`PT`/`ML`/`Frag` columns in `compat.trackeval` and
+        `mostly_tracked`/`partially_tracked`/`mostly_lost`/`num_fragmentations`
+        in `compat.motmetrics`.
+  - [ ] Per-trajectory `motmetrics` events — `num_transfer`/`num_ascend`/
+        `num_migrate` (the ID-switch subtypes), the last `compat.motmetrics`
+        fields still raising `NotImplementedError`.
+  - [ ] Other TrackEval metrics — `IDEucl`, `TrackMAP`, `VACE`, and `JAndF`
+        (J&F). J&F is DAVIS's native metric, so this also completes the DAVIS
+        adapter beyond the CLEAR/Identity/HOTA it serves today.
+  - [ ] Remaining `compat.trackeval` `Evaluator` behaviors — parallel
+        evaluation, printing/plotting output, zipped input, `DO_PREPROC=False`,
+        `MOT15`, and `BREAK_ON_ERROR`.
 - [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
       benchmark (ingest + preprocessing + similarity), added incrementally:
   - [x] DanceTrack — no adapter code needed. Its `gt.txt`/results format is
