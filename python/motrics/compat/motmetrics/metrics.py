@@ -1,11 +1,21 @@
 """Drop-in for ``motmetrics.metrics``, backed by motrics' Rust core.
 
-Only a subset of ``motmetrics.metrics.motchallenge_metrics`` is implemented so
-far (the CLEAR/Identity metrics motrics already computes). The rest —
-mostly_tracked/partially_tracked/mostly_lost, num_fragmentations, and the
-transfer/ascend/migrate switch subtypes — need per-trajectory bookkeeping
-motrics' core doesn't do yet; requesting them raises ``NotImplementedError``
-rather than silently returning nothing.
+Most of ``motmetrics.metrics.motchallenge_metrics`` is implemented: the
+CLEAR/Identity metrics plus the per-trajectory
+mostly_tracked/partially_tracked/mostly_lost counts (from the core's
+per-trajectory track ratios, applying py-motmetrics' inclusive ``>=0.8``/
+``<0.2`` bounds).
+
+Still unsupported (raise ``NotImplementedError`` rather than silently
+returning nothing):
+
+- ``num_fragmentations`` — py-motmetrics only breaks a track on a *present*
+  miss, whereas the core's ``frag`` (TrackEval semantics) also breaks on
+  frames where the object is absent, so the counts differ; a py-motmetrics
+  fragmentation count would need separate core support.
+- ``num_transfer``/``num_ascend``/``num_migrate`` — the switch subtypes need
+  py-motmetrics' event-level matcher (hypothesis-side history), which motrics'
+  single-pass core doesn't reproduce.
 """
 
 from __future__ import annotations
@@ -44,6 +54,9 @@ SUPPORTED = (
     "num_false_positives",
     "num_misses",
     "num_switches",
+    "mostly_tracked",
+    "partially_tracked",
+    "mostly_lost",
     "recall",
     "precision",
     "num_unique_objects",
@@ -72,12 +85,19 @@ def _summarize(acc: MOTAccumulator) -> dict[str, float]:
 
     num_precision_denom = clear.num_false_positives + num_detections
     num_idf1_denom = identity.num_gt + identity.num_pred
+    # py-motmetrics' inclusive bounds: mostly-tracked >= 0.8, mostly-lost < 0.2
+    # (TrackEval uses a strict > 0.8, so the core's own mt/pt/ml can differ at
+    # exactly 0.8 — recomputed here from the raw ratios instead).
+    ratios = clear.track_ratios
     return {
         "mota": 1.0 - _quiet_divide(errors, clear.num_gt),
         "motp": -clear.motp if num_detections else float("nan"),
         "num_false_positives": clear.num_false_positives,
         "num_misses": clear.num_misses,
         "num_switches": clear.num_switches,
+        "mostly_tracked": sum(1 for r in ratios if r >= 0.8),
+        "partially_tracked": sum(1 for r in ratios if 0.2 <= r < 0.8),
+        "mostly_lost": sum(1 for r in ratios if r < 0.2),
         "recall": _quiet_divide(num_detections, clear.num_gt),
         "precision": _quiet_divide(num_detections, num_precision_denom),
         "num_unique_objects": len(acc._oid_index),

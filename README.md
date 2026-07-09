@@ -97,8 +97,8 @@ summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="a
 
 | | |
 | --- | --- |
-| ✅ Supported | `mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`, `num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects` |
-| ❌ Not yet | Per-trajectory metrics (mostly-tracked, fragmentations, transfer/ascend/migrate) — raises `NotImplementedError` naming what's missing |
+| ✅ Supported | `mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`, `num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects`, `mostly_tracked`, `partially_tracked`, `mostly_lost` |
+| ❌ Not yet | `num_fragmentations` (py-motmetrics counts fragmentation differently from the core's TrackEval-style `frag`) and the `num_transfer`/`num_ascend`/`num_migrate` switch subtypes — raises `NotImplementedError` naming what's missing |
 
 See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
 for what else differs (e.g. no `events`/`mot_events` DataFrame).
@@ -244,11 +244,17 @@ it yourself.
         reports). The `compat.motmetrics` trajectory fields use py-motmetrics'
         different thresholds/fragmentation definition, so they fold into the
         next item.
-  - [ ] Per-trajectory `motmetrics` fields — `mostly_tracked`/
-        `partially_tracked`/`mostly_lost`/`num_fragmentations` (py-motmetrics'
-        `>=0.8`/`<0.2` bounds, distinct from TrackEval's) and the
-        `num_transfer`/`num_ascend`/`num_migrate` ID-switch subtypes, the last
-        `compat.motmetrics` fields still raising `NotImplementedError`.
+  - [x] Per-trajectory `motmetrics` counts — `mostly_tracked`/
+        `partially_tracked`/`mostly_lost`, wired into `compat.motmetrics` from
+        the core's new per-trajectory `track_ratios` (matched-frame fraction per
+        object) under py-motmetrics' inclusive `>=0.8`/`<0.2` bounds, validated
+        against real py-motmetrics.
+  - [ ] Remaining `motmetrics` fields — `num_fragmentations` (py-motmetrics
+        only breaks a track on a *present* miss, unlike the core's TrackEval
+        `frag`, so it needs a separate fragmentation count) and the
+        `num_transfer`/`num_ascend`/`num_migrate` switch subtypes (which need
+        py-motmetrics' event-level matcher with hypothesis-side history). The
+        last `compat.motmetrics` fields still raising `NotImplementedError`.
   - [ ] Other TrackEval metrics — `IDEucl`, `TrackMAP`, `VACE`, and `JAndF`
         (J&F). J&F is DAVIS's native metric, so this also completes the DAVIS
         adapter beyond the CLEAR/Identity/HOTA it serves today.

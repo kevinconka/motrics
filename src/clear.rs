@@ -77,6 +77,11 @@ pub struct ClearMetrics {
     pub clr_re: f64,
     /// CLEAR precision: `TP / max(1, TP + FP)`.
     pub clr_pr: f64,
+    /// Per ground-truth trajectory, the fraction of its frames that were matched
+    /// (counting id switches as matched). Sorted descending. This is the basis
+    /// for MT/PT/ML under any threshold convention — TrackEval's `>0.8`/`<0.2`
+    /// as used for `mt`/`pt`/`ml` here, or py-motmetrics' inclusive `>=0.8`.
+    pub track_ratios: Vec<f64>,
 }
 
 /// Per-gt-trajectory bookkeeping needed for MT/PT/ML and Frag, mirroring
@@ -201,11 +206,20 @@ fn finalize(mut m: ClearMetrics, state: &TrackState) -> ClearMetrics {
         m.motp = state.motp_sum / m.num_matches as f64;
     }
 
-    // MT/PT/ML from each trajectory's matched-frame ratio (TrackEval's bounds:
-    // MT strictly above 0.8, ML strictly below 0.2, PT in between inclusive).
-    for (gt_id, &present) in &state.gt_id_count {
-        let matched = state.gt_matched_count.get(gt_id).copied().unwrap_or(0);
-        let ratio = matched as f64 / present as f64;
+    // Each trajectory's matched-frame ratio, the basis for MT/PT/ML.
+    let mut track_ratios: Vec<f64> = state
+        .gt_id_count
+        .iter()
+        .map(|(gt_id, &present)| {
+            let matched = state.gt_matched_count.get(gt_id).copied().unwrap_or(0);
+            matched as f64 / present as f64
+        })
+        .collect();
+    track_ratios.sort_unstable_by(|a, b| b.total_cmp(a));
+
+    // TrackEval's bounds: MT strictly above 0.8, ML strictly below 0.2, PT in
+    // between inclusive.
+    for &ratio in &track_ratios {
         if ratio > 0.8 {
             m.mt += 1;
         } else if ratio >= 0.2 {
@@ -214,6 +228,7 @@ fn finalize(mut m: ClearMetrics, state: &TrackState) -> ClearMetrics {
             m.ml += 1;
         }
     }
+    m.track_ratios = track_ratios;
     m.frag = state
         .gt_frag_count
         .values()
@@ -396,6 +411,7 @@ mod tests {
         let m = compute_clear(&frames, 0.5);
         assert_eq!((m.mt, m.pt, m.ml), (1, 0, 1));
         assert_eq!(m.frag, 0); // gt 1 tracked without interruption
+        assert_eq!(m.track_ratios, vec![1.0, 0.0]); // sorted descending
     }
 
     #[test]

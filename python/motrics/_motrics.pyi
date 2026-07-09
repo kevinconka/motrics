@@ -252,6 +252,12 @@ class ClearMetrics:
     def clr_pr(self) -> float:
         """CLEAR precision: ``TP / max(1, TP + FP)``."""
 
+    @property
+    def track_ratios(self) -> list[float]:
+        """Per gt trajectory, the fraction of its frames that were matched (id
+        switches count as matched), sorted descending. The basis for MT/PT/ML
+        under any threshold convention."""
+
     def __repr__(self) -> str: ...
 
 def compute_clear(

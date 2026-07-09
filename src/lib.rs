@@ -513,6 +513,10 @@ struct ClearMetrics {
     /// CLEAR precision: `TP / max(1, TP + FP)`.
     #[pyo3(get)]
     clr_pr: f64,
+    /// Per gt trajectory, the fraction of its frames that were matched (id
+    /// switches count as matched), sorted descending. The basis for MT/PT/ML.
+    #[pyo3(get)]
+    track_ratios: Vec<f64>,
 }
 
 #[pymethods]
@@ -554,6 +558,7 @@ impl From<clear::ClearMetrics> for ClearMetrics {
             motal: m.motal,
             clr_re: m.clr_re,
             clr_pr: m.clr_pr,
+            track_ratios: m.track_ratios,
         }
     }
 }
