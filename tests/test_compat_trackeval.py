@@ -159,6 +159,48 @@ def test_matches_real_trackeval_end_to_end(tmp_path: Path) -> None:
     assert mine["MOT17-02"]["pedestrian"]["CLEAR"]["IDSW"] == 0
 
 
+@pytest.mark.parametrize("empty", ["tracker", "gt"])
+def test_clear_eval_sequence_empty_matches_trackeval(empty: str) -> None:
+    """The empty-tracker / empty-gt short-circuits mirror TrackEval exactly."""
+    box = [(0.0, 0.0, 10.0, 10.0)]
+    if empty == "tracker":
+        data: dict[str, Any] = {
+            "gt_ids": [np.array([0])],
+            "tracker_ids": [np.array([], dtype=int)],
+            "gt_dets": [box],
+            "tracker_dets": [[]],
+            "similarity_scores": [np.zeros((1, 0))],
+            "num_gt_dets": 1,
+            "num_tracker_dets": 0,
+            "num_gt_ids": 1,
+            "num_tracker_ids": 0,
+            "num_timesteps": 1,
+        }
+    else:
+        data = {
+            "gt_ids": [np.array([], dtype=int)],
+            "tracker_ids": [np.array([0])],
+            "gt_dets": [[]],
+            "tracker_dets": [box],
+            "similarity_scores": [np.zeros((0, 1))],
+            "num_gt_dets": 0,
+            "num_tracker_dets": 1,
+            "num_gt_ids": 0,
+            "num_tracker_ids": 1,
+            "num_timesteps": 1,
+        }
+
+    mine = trackeval.metrics.CLEAR({"PRINT_CONFIG": False}).eval_sequence(dict(data))
+    ref = real_trackeval.metrics.CLEAR({"PRINT_CONFIG": False}).eval_sequence(
+        dict(data)
+    )
+    assert mine.keys() == ref.keys()
+    for field in ref:
+        assert np.allclose(
+            np.asarray(mine[field]), np.asarray(ref[field]), atol=1e-9
+        ), f"{field}: {mine[field]} != {ref[field]}"
+
+
 def test_do_preproc_false_raises(tmp_path: Path) -> None:
     gt_folder, trackers_folder = _build_dataset_dir(tmp_path)
     config = {**_dataset_config(gt_folder, trackers_folder), "DO_PREPROC": False}
