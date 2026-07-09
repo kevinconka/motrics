@@ -39,9 +39,9 @@ What's NOT implemented (see each module's docstring for specifics):
   other than ``pedestrian`` (TrackEval's own MOT Challenge adapter is
   pedestrian-only too, so this isn't a gap versus TrackEval itself),
   ``DO_PREPROC=False``, and ``BENCHMARK="MOT15"`` (raises at construction).
-- ``metrics.CLEAR``: only ``MOTA``/``MOTP`` — not ``MT``/``PT``/``ML``/``Frag``/
-  ``MODA``/``sMOTA``/etc., which need mostly-tracked/lost and fragmentation
-  bookkeeping the Rust core doesn't compute yet.
+- ``metrics.CLEAR``: full field set — ``MOTA``/``MOTP``/``MODA``/``sMOTA``/
+  ``MOTAL``, ``MT``/``PT``/``ML``/``Frag``, and the recall/precision/ratio
+  fields — all bit-exact against real TrackEval.
 - ``metrics.{IDEucl,JAndF,TrackMAP,VACE}``: not implemented at all.
 """
 

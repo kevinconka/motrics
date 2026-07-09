@@ -6,11 +6,10 @@
 //! ground-truth object on the hypothesis id it was matched to previously so
 //! that identity switches are counted correctly.
 //!
-//! Bit-exact parity with TrackEval (and the extra sub-metrics MT/ML/Frag) is
-//! deferred to the dedicated parity-tests milestone; this module implements the
-//! core CLEAR counts and the two headline scores.
+//! Numbers are bit-exact with TrackEval, including the per-trajectory
+//! sub-metrics MT/PT/ML and Frag and the derived MODA/sMOTA/MOTAL scores.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::iou::{iou_matrix, Bbox};
 
@@ -56,6 +55,48 @@ pub struct ClearMetrics {
     /// Identity switches: a gt object matched to a different hypothesis id than
     /// the last time it was matched.
     pub num_switches: usize,
+    /// Mostly tracked: gt trajectories matched in more than 80% of the frames
+    /// they appear in.
+    pub mt: usize,
+    /// Partially tracked: gt trajectories matched in 20–80% of their frames.
+    pub pt: usize,
+    /// Mostly lost: gt trajectories matched in less than 20% of their frames.
+    pub ml: usize,
+    /// Fragmentations: total number of times a gt trajectory resumes after an
+    /// interruption (transitions from untracked to tracked, minus the first).
+    pub frag: usize,
+    /// Multiple Object Detection Accuracy: `(TP - FP) / max(1, TP + FN)`.
+    pub moda: f64,
+    /// MOTA using overlap instead of a count of true positives:
+    /// `(MOTP_sum - FP - IDSW) / max(1, TP + FN)`.
+    pub smota: f64,
+    /// MOTA with a log-scaled ID-switch penalty:
+    /// `(TP - FP - log10(IDSW)) / max(1, TP + FN)`.
+    pub motal: f64,
+    /// CLEAR recall: `TP / max(1, TP + FN)`.
+    pub clr_re: f64,
+    /// CLEAR precision: `TP / max(1, TP + FP)`.
+    pub clr_pr: f64,
+}
+
+/// Per-gt-trajectory bookkeeping needed for MT/PT/ML and Frag, mirroring
+/// TrackEval's `gt_id_count`/`gt_matched_count`/`gt_frag_count` arrays. All keyed
+/// by gt id, so memory grows with the number of distinct objects, not frames.
+#[derive(Debug, Default)]
+struct TrackState {
+    // Last hypothesis id each gt object was matched to (persists across gaps);
+    // drives IDSW scoring and the matching continuity bonus.
+    last_pred_of_gt: HashMap<i64, i64>,
+    // Frames each gt id appears in, and frames it was matched in.
+    gt_id_count: HashMap<i64, u32>,
+    gt_matched_count: HashMap<i64, u32>,
+    // Number of untracked -> tracked transitions per gt id.
+    gt_frag_count: HashMap<i64, u32>,
+    // gt ids matched in the immediately previous *non-empty* frame; TrackEval
+    // only resets this on frames that have both gt and predictions, so a gap
+    // caused by an empty frame does not itself count as a fragmentation.
+    prev_timestep_matched: HashSet<i64>,
+    motp_sum: f64,
 }
 
 // Scaled by the frame's max score so continuation always wins; mirrors TrackEval's fixed `1000 * score_mat + similarity`.
@@ -65,24 +106,28 @@ const CONTINUITY_BONUS_MULTIPLIER: f64 = 1000.0;
 const REJECT: f64 = -1e18;
 
 /// Match one frame against a precomputed similarity matrix and fold the
-/// result into `m`, `last_pred_of_gt`, and `motp_sum`. Shared by the
-/// boxes-based and precomputed-similarity entry points below.
+/// result into `m` and `state`. Shared by the boxes-based and
+/// precomputed-similarity entry points below.
 fn accumulate_frame(
     gt_ids: &[i64],
     pred_ids: &[i64],
     sim: &[Vec<f64>],
     threshold: f64,
-    last_pred_of_gt: &mut HashMap<i64, i64>,
-    motp_sum: &mut f64,
+    state: &mut TrackState,
     m: &mut ClearMetrics,
 ) {
     let n_gt = gt_ids.len();
     let n_pred = pred_ids.len();
     m.num_gt += n_gt;
 
+    // TrackEval skips these frames without touching `prev_timestep_matched`, so
+    // a gap they introduce does not, on its own, register as a fragmentation.
     if n_gt == 0 {
         m.num_false_positives += n_pred;
         return;
+    }
+    for &g in gt_ids {
+        *state.gt_id_count.entry(g).or_insert(0) += 1;
     }
     if n_pred == 0 {
         m.num_misses += n_gt;
@@ -100,7 +145,7 @@ fn accumulate_frame(
     // Maximisation target: allowed pairs score `sim (+ bonus if continuing)`, disallowed pairs score REJECT.
     let mut flat = vec![REJECT; n_gt * n_pred];
     for i in 0..n_gt {
-        let continues = last_pred_of_gt.get(&gt_ids[i]);
+        let continues = state.last_pred_of_gt.get(&gt_ids[i]);
         for j in 0..n_pred {
             if sim[i][j] >= threshold {
                 let bonus = match continues {
@@ -116,36 +161,78 @@ fn accumulate_frame(
         lsap::solve(n_gt, n_pred, &flat, true).expect("finite score matrix is solvable");
 
     let mut matched = 0;
+    let mut matched_gts = HashSet::with_capacity(n_gt);
     for (i, j) in rows.into_iter().zip(cols) {
         if sim[i][j] < threshold {
             continue; // disallowed pair picked only to fill the assignment
         }
         matched += 1;
-        *motp_sum += sim[i][j];
+        state.motp_sum += sim[i][j];
 
         let gt_id = gt_ids[i];
         let pred_id = pred_ids[j];
-        if let Some(&prev) = last_pred_of_gt.get(&gt_id) {
+        if let Some(&prev) = state.last_pred_of_gt.get(&gt_id) {
             if prev != pred_id {
                 m.num_switches += 1;
             }
         }
-        last_pred_of_gt.insert(gt_id, pred_id);
+        state.last_pred_of_gt.insert(gt_id, pred_id);
+
+        *state.gt_matched_count.entry(gt_id).or_insert(0) += 1;
+        // Untracked in the previous non-empty frame but tracked now: a resume.
+        if !state.prev_timestep_matched.contains(&gt_id) {
+            *state.gt_frag_count.entry(gt_id).or_insert(0) += 1;
+        }
+        matched_gts.insert(gt_id);
     }
+    state.prev_timestep_matched = matched_gts;
 
     m.num_matches += matched;
     m.num_false_positives += n_pred - matched;
     m.num_misses += n_gt - matched;
 }
 
-fn finalize(mut m: ClearMetrics, motp_sum: f64) -> ClearMetrics {
+fn finalize(mut m: ClearMetrics, state: &TrackState) -> ClearMetrics {
     if m.num_gt > 0 {
         let errors = (m.num_misses + m.num_false_positives + m.num_switches) as f64;
         m.mota = 1.0 - errors / m.num_gt as f64;
     }
     if m.num_matches > 0 {
-        m.motp = motp_sum / m.num_matches as f64;
+        m.motp = state.motp_sum / m.num_matches as f64;
     }
+
+    // MT/PT/ML from each trajectory's matched-frame ratio (TrackEval's bounds:
+    // MT strictly above 0.8, ML strictly below 0.2, PT in between inclusive).
+    for (gt_id, &present) in &state.gt_id_count {
+        let matched = state.gt_matched_count.get(gt_id).copied().unwrap_or(0);
+        let ratio = matched as f64 / present as f64;
+        if ratio > 0.8 {
+            m.mt += 1;
+        } else if ratio >= 0.2 {
+            m.pt += 1;
+        } else {
+            m.ml += 1;
+        }
+    }
+    m.frag = state
+        .gt_frag_count
+        .values()
+        .map(|&c| c.saturating_sub(1) as usize)
+        .sum();
+
+    let (tp, fp, fnn, idsw) = (
+        m.num_matches as f64,
+        m.num_false_positives as f64,
+        m.num_misses as f64,
+        m.num_switches as f64,
+    );
+    let gt_denom = (tp + fnn).max(1.0);
+    m.moda = (tp - fp) / gt_denom;
+    m.smota = (state.motp_sum - fp - idsw) / gt_denom;
+    let safe_log_idsw = if idsw > 0.0 { idsw.log10() } else { 0.0 };
+    m.motal = (tp - fp - safe_log_idsw) / gt_denom;
+    m.clr_re = tp / gt_denom;
+    m.clr_pr = tp / (tp + fp).max(1.0);
     m
 }
 
@@ -158,9 +245,7 @@ fn finalize(mut m: ClearMetrics, motp_sum: f64) -> ClearMetrics {
 #[derive(Debug, Default)]
 pub struct ClearAccumulator {
     metrics: ClearMetrics,
-    // Last hypothesis id each gt object was matched to (persists across gaps).
-    last_pred_of_gt: HashMap<i64, i64>,
-    motp_sum: f64,
+    state: TrackState,
 }
 
 impl ClearAccumulator {
@@ -181,15 +266,14 @@ impl ClearAccumulator {
             pred_ids,
             sim,
             threshold,
-            &mut self.last_pred_of_gt,
-            &mut self.motp_sum,
+            &mut self.state,
             &mut self.metrics,
         );
     }
 
-    /// Finalize MOTA/MOTP from the accumulated counts.
+    /// Finalize all CLEAR fields from the accumulated counts.
     pub fn compute(&self) -> ClearMetrics {
-        finalize(self.metrics.clone(), self.motp_sum)
+        finalize(self.metrics.clone(), &self.state)
     }
 }
 
@@ -300,5 +384,34 @@ mod tests {
         assert_eq!(m.num_frames, 0);
         assert_eq!(m.mota, 0.0);
         assert_eq!(m.motp, 0.0);
+        assert_eq!((m.mt, m.pt, m.ml, m.frag), (0, 0, 0, 0));
+    }
+
+    #[test]
+    fn mostly_tracked_and_mostly_lost() {
+        // gt 1 is matched in every frame (MT); gt 2 is never matched (ML).
+        let frames: Vec<_> = (0..5)
+            .map(|_| frame(&[1, 2], &[A, B], &[10], &[A]))
+            .collect();
+        let m = compute_clear(&frames, 0.5);
+        assert_eq!((m.mt, m.pt, m.ml), (1, 0, 1));
+        assert_eq!(m.frag, 0); // gt 1 tracked without interruption
+    }
+
+    #[test]
+    fn fragmentation_counts_resumes() {
+        // gt 1 matched, matched, lost (present but no overlap), matched, matched:
+        // one interruption -> Frag == 1, tracked ratio 4/5 -> partially tracked.
+        let frames = [
+            frame(&[1], &[A], &[10], &[A]),
+            frame(&[1], &[A], &[10], &[A]),
+            frame(&[1], &[A], &[10], &[B]),
+            frame(&[1], &[A], &[10], &[A]),
+            frame(&[1], &[A], &[10], &[A]),
+        ];
+        let m = compute_clear(&frames, 0.5);
+        assert_eq!(m.num_matches, 4);
+        assert_eq!((m.mt, m.pt, m.ml), (0, 1, 0));
+        assert_eq!(m.frag, 1);
     }
 }

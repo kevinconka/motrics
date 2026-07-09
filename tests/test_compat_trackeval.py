@@ -105,7 +105,31 @@ def test_matches_real_trackeval_end_to_end(tmp_path: Path) -> None:
         m = mine[seq_key]["pedestrian"]
         r = real[seq_key]["pedestrian"]
         for metric_name, fields in [
-            ("CLEAR", ["MOTA", "MOTP", "CLR_TP", "CLR_FN", "CLR_FP", "IDSW"]),
+            (
+                "CLEAR",
+                [
+                    "MOTA",
+                    "MOTP",
+                    "CLR_TP",
+                    "CLR_FN",
+                    "CLR_FP",
+                    "IDSW",
+                    "MT",
+                    "PT",
+                    "ML",
+                    "Frag",
+                    "MODA",
+                    "sMOTA",
+                    "MOTAL",
+                    "CLR_Re",
+                    "CLR_Pr",
+                    "MTR",
+                    "PTR",
+                    "MLR",
+                    "CLR_F1",
+                    "FP_per_frame",
+                ],
+            ),
             ("Identity", ["IDF1", "IDP", "IDR", "IDTP", "IDFP", "IDFN"]),
             (
                 "HOTA",
