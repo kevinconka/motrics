@@ -113,7 +113,7 @@ jobs:
           enable-cache: true
       - run: uv sync --group dev --group parity
       - name: Cache real MOT17 data (~150 MB, seldom changes)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: benchmarks/data/real
           key: mot17-train-v1
