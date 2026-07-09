@@ -135,8 +135,8 @@ core dependency already).
 
 | | |
 | --- | --- |
-| ✅ Supported | `HOTA`, `Identity`, `CLEAR`'s `MOTA`/`MOTP` — bit-exact vs real TrackEval |
-| ❌ Not yet | Parallel evaluation · `BREAK_ON_ERROR` config · printing/plotting · zipped input · `DO_PREPROC=False` · `MOT15` · extra `CLEAR` fields (`MT`/`PT`/`ML`/`Frag`/etc.) · `IDEucl`/`JAndF`/`TrackMAP`/`VACE` |
+| ✅ Supported | `HOTA`, `Identity`, and `CLEAR`'s full field set (`MOTA`/`MOTP`/`MODA`/`sMOTA`/`MOTAL`, `MT`/`PT`/`ML`/`Frag`, `CLR_Re`/`CLR_Pr`/`MTR`/`PTR`/`MLR`/`CLR_F1`/`FP_per_frame`) — bit-exact vs real TrackEval |
+| ❌ Not yet | Parallel evaluation · `BREAK_ON_ERROR` config · printing/plotting · zipped input · `DO_PREPROC=False` · `MOT15` · `IDEucl`/`JAndF`/`TrackMAP`/`VACE` |
 
 See [`python/motrics/compat/trackeval/`](python/motrics/compat/trackeval/)
 for the full list of what differs from real TrackEval.
@@ -234,17 +234,21 @@ it yourself.
 - [ ] Metric completeness — the metric field set a drop-in replacement needs to
       reproduce a full MOTChallenge results table, tracked separately from the
       dataset adapters below since it's core-metric work, not ingest:
-  - [ ] Extended CLEAR fields — `MT`/`PT`/`ML` (mostly-/partially-/mostly-lost
+  - [x] Extended CLEAR fields — `MT`/`PT`/`ML` (mostly-/partially-/mostly-lost
         trajectory counts), `Frag` (fragmentations), and the derived
-        `MODA`/`sMOTA`/`CLR_Re`/`CLR_Pr`/`MOTAL` scores TrackEval's `CLEAR`
-        reports. The core `ClearMetrics` computes MOTA/MOTP/TP/FP/FN/IDSW today;
-        these need per-trajectory bookkeeping it doesn't yet do. Unblocks the
-        `MT`/`PT`/`ML`/`Frag` columns in `compat.trackeval` and
-        `mostly_tracked`/`partially_tracked`/`mostly_lost`/`num_fragmentations`
-        in `compat.motmetrics`.
-  - [ ] Per-trajectory `motmetrics` events — `num_transfer`/`num_ascend`/
-        `num_migrate` (the ID-switch subtypes), the last `compat.motmetrics`
-        fields still raising `NotImplementedError`.
+        `MODA`/`sMOTA`/`MOTAL`/`CLR_Re`/`CLR_Pr` scores. `ClearMetrics` now
+        carries per-trajectory bookkeeping (keyed by object id, so memory still
+        grows with objects, not frames), bit-exact vs TrackEval and shared by
+        the batch and streaming paths. `compat.trackeval`'s `CLEAR` now exposes
+        the full field set (`MT`/`PT`/`ML`/`Frag` plus every ratio TrackEval
+        reports). The `compat.motmetrics` trajectory fields use py-motmetrics'
+        different thresholds/fragmentation definition, so they fold into the
+        next item.
+  - [ ] Per-trajectory `motmetrics` fields — `mostly_tracked`/
+        `partially_tracked`/`mostly_lost`/`num_fragmentations` (py-motmetrics'
+        `>=0.8`/`<0.2` bounds, distinct from TrackEval's) and the
+        `num_transfer`/`num_ascend`/`num_migrate` ID-switch subtypes, the last
+        `compat.motmetrics` fields still raising `NotImplementedError`.
   - [ ] Other TrackEval metrics — `IDEucl`, `TrackMAP`, `VACE`, and `JAndF`
         (J&F). J&F is DAVIS's native metric, so this also completes the DAVIS
         adapter beyond the CLEAR/Identity/HOTA it serves today.

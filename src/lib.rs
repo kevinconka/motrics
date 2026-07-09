@@ -486,19 +486,50 @@ struct ClearMetrics {
     /// Identity switches.
     #[pyo3(get)]
     num_switches: usize,
+    /// Mostly tracked: gt trajectories matched in more than 80% of their frames.
+    #[pyo3(get)]
+    mt: usize,
+    /// Partially tracked: gt trajectories matched in 20–80% of their frames.
+    #[pyo3(get)]
+    pt: usize,
+    /// Mostly lost: gt trajectories matched in less than 20% of their frames.
+    #[pyo3(get)]
+    ml: usize,
+    /// Fragmentations: times a gt trajectory resumes after an interruption.
+    #[pyo3(get)]
+    frag: usize,
+    /// Multiple Object Detection Accuracy: `(TP - FP) / max(1, TP + FN)`.
+    #[pyo3(get)]
+    moda: f64,
+    /// MOTA over overlap: `(MOTP_sum - FP - IDSW) / max(1, TP + FN)`.
+    #[pyo3(get)]
+    smota: f64,
+    /// MOTA with a log-scaled ID-switch penalty.
+    #[pyo3(get)]
+    motal: f64,
+    /// CLEAR recall: `TP / max(1, TP + FN)`.
+    #[pyo3(get)]
+    clr_re: f64,
+    /// CLEAR precision: `TP / max(1, TP + FP)`.
+    #[pyo3(get)]
+    clr_pr: f64,
 }
 
 #[pymethods]
 impl ClearMetrics {
     fn __repr__(&self) -> String {
         format!(
-            "ClearMetrics(mota={:.4}, motp={:.4}, tp={}, fp={}, fn={}, idsw={})",
+            "ClearMetrics(mota={:.4}, motp={:.4}, tp={}, fp={}, fn={}, idsw={}, mt={}, pt={}, ml={}, frag={})",
             self.mota,
             self.motp,
             self.num_matches,
             self.num_false_positives,
             self.num_misses,
             self.num_switches,
+            self.mt,
+            self.pt,
+            self.ml,
+            self.frag,
         )
     }
 }
@@ -514,6 +545,15 @@ impl From<clear::ClearMetrics> for ClearMetrics {
             num_false_positives: m.num_false_positives,
             num_misses: m.num_misses,
             num_switches: m.num_switches,
+            mt: m.mt,
+            pt: m.pt,
+            ml: m.ml,
+            frag: m.frag,
+            moda: m.moda,
+            smota: m.smota,
+            motal: m.motal,
+            clr_re: m.clr_re,
+            clr_pr: m.clr_pr,
         }
     }
 }

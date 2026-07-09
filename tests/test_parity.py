@@ -83,6 +83,16 @@ def test_clear_parity(seq: Sequence) -> None:
     assert m.num_switches == ref["IDSW"]
     assert m.mota == pytest.approx(ref["MOTA"], abs=1e-9)
     assert m.motp == pytest.approx(ref["MOTP"], abs=1e-9)
+    # Extended per-trajectory fields and derived scores.
+    assert m.mt == ref["MT"]
+    assert m.pt == ref["PT"]
+    assert m.ml == ref["ML"]
+    assert m.frag == ref["Frag"]
+    assert m.moda == pytest.approx(ref["MODA"], abs=1e-9)
+    assert m.smota == pytest.approx(ref["sMOTA"], abs=1e-9)
+    assert m.motal == pytest.approx(ref["MOTAL"], abs=1e-9)
+    assert m.clr_re == pytest.approx(ref["CLR_Re"], abs=1e-9)
+    assert m.clr_pr == pytest.approx(ref["CLR_Pr"], abs=1e-9)
 
 
 @pytest.mark.parametrize("seq", SEQUENCES, ids=lambda s: s.name)

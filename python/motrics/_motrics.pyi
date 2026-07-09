@@ -216,6 +216,42 @@ class ClearMetrics:
     def num_switches(self) -> int:
         """Identity switches."""
 
+    @property
+    def mt(self) -> int:
+        """Mostly tracked: gt trajectories matched in more than 80% of their frames."""
+
+    @property
+    def pt(self) -> int:
+        """Partially tracked: gt trajectories matched in 20-80% of their frames."""
+
+    @property
+    def ml(self) -> int:
+        """Mostly lost: gt trajectories matched in less than 20% of their frames."""
+
+    @property
+    def frag(self) -> int:
+        """Fragmentations: times a gt trajectory resumes after an interruption."""
+
+    @property
+    def moda(self) -> float:
+        """Multiple Object Detection Accuracy: ``(TP - FP) / max(1, TP + FN)``."""
+
+    @property
+    def smota(self) -> float:
+        """MOTA over overlap: ``(MOTP_sum - FP - IDSW) / max(1, TP + FN)``."""
+
+    @property
+    def motal(self) -> float:
+        """MOTA with a log-scaled ID-switch penalty."""
+
+    @property
+    def clr_re(self) -> float:
+        """CLEAR recall: ``TP / max(1, TP + FN)``."""
+
+    @property
+    def clr_pr(self) -> float:
+        """CLEAR precision: ``TP / max(1, TP + FP)``."""
+
     def __repr__(self) -> str: ...
 
 def compute_clear(
