@@ -65,7 +65,7 @@ def test_metrics_compute_rejects_unsupported_metric() -> None:
     acc = compat_mm.MOTAccumulator(auto_id=True)
     acc.update([], [], [])
     with pytest.raises(NotImplementedError):
-        compat_mm.metrics.create().compute(acc, metrics=["mostly_tracked"])
+        compat_mm.metrics.create().compute(acc, metrics=["num_transfer"])
 
 
 def test_continuity_survives_large_magnitude_distances() -> None:
