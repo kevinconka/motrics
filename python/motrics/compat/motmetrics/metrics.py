@@ -1,18 +1,16 @@
 """Drop-in for ``motmetrics.metrics``, backed by motrics' Rust core.
 
 Most of ``motmetrics.metrics.motchallenge_metrics`` is implemented: the
-CLEAR/Identity metrics plus the per-trajectory
+CLEAR/Identity metrics, the per-trajectory
 mostly_tracked/partially_tracked/mostly_lost counts (from the core's
 per-trajectory track ratios, applying py-motmetrics' inclusive ``>=0.8``/
-``<0.2`` bounds).
+``<0.2`` bounds), and num_fragmentations (from the core's
+``frag_present_only``, which — unlike ``frag``'s TrackEval semantics — only
+breaks a track on a *present* miss, matching py-motmetrics' own definition).
 
 Still unsupported (raise ``NotImplementedError`` rather than silently
 returning nothing):
 
-- ``num_fragmentations`` — py-motmetrics only breaks a track on a *present*
-  miss, whereas the core's ``frag`` (TrackEval semantics) also breaks on
-  frames where the object is absent, so the counts differ; a py-motmetrics
-  fragmentation count would need separate core support.
 - ``num_transfer``/``num_ascend``/``num_migrate`` — the switch subtypes need
   py-motmetrics' event-level matcher (hypothesis-side history), which motrics'
   single-pass core doesn't reproduce.
@@ -54,6 +52,7 @@ SUPPORTED = (
     "num_false_positives",
     "num_misses",
     "num_switches",
+    "num_fragmentations",
     "mostly_tracked",
     "partially_tracked",
     "mostly_lost",
@@ -95,6 +94,7 @@ def _summarize(acc: MOTAccumulator) -> dict[str, float]:
         "num_false_positives": clear.num_false_positives,
         "num_misses": clear.num_misses,
         "num_switches": clear.num_switches,
+        "num_fragmentations": clear.frag_present_only,
         "mostly_tracked": sum(1 for r in ratios if r >= 0.8),
         "partially_tracked": sum(1 for r in ratios if 0.2 <= r < 0.8),
         "mostly_lost": sum(1 for r in ratios if r < 0.2),

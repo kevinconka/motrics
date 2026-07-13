@@ -97,8 +97,8 @@ summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="a
 
 | | |
 | --- | --- |
-| ✅ Supported | `mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`, `num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects`, `mostly_tracked`, `partially_tracked`, `mostly_lost` |
-| ❌ Not yet | `num_fragmentations` (py-motmetrics counts fragmentation differently from the core's TrackEval-style `frag`) and the `num_transfer`/`num_ascend`/`num_migrate` switch subtypes — raises `NotImplementedError` naming what's missing |
+| ✅ Supported | `mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`, `num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects`, `mostly_tracked`, `partially_tracked`, `mostly_lost`, `num_fragmentations` |
+| ❌ Not yet | `num_transfer`/`num_ascend`/`num_migrate` (switch subtypes needing py-motmetrics' event-level matcher) — raises `NotImplementedError` naming what's missing |
 
 See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
 for what else differs (e.g. no `events`/`mot_events` DataFrame).
@@ -249,12 +249,19 @@ it yourself.
         the core's new per-trajectory `track_ratios` (matched-frame fraction per
         object) under py-motmetrics' inclusive `>=0.8`/`<0.2` bounds, validated
         against real py-motmetrics.
-  - [ ] Remaining `motmetrics` fields — `num_fragmentations` (py-motmetrics
-        only breaks a track on a *present* miss, unlike the core's TrackEval
-        `frag`, so it needs a separate fragmentation count) and the
-        `num_transfer`/`num_ascend`/`num_migrate` switch subtypes (which need
-        py-motmetrics' event-level matcher with hypothesis-side history). The
-        last `compat.motmetrics` fields still raising `NotImplementedError`.
+  - [x] `num_fragmentations` — the core now also tracks `frag_present_only`
+        alongside `frag`: py-motmetrics only breaks a trajectory on a frame
+        where the object was explicitly present but unmatched (a logged
+        miss), unlike TrackEval's `frag`, which also breaks on frames where
+        the object is simply absent; both are computed from the same
+        per-frame matching pass, validated against real py-motmetrics.
+  - [ ] `num_transfer`/`num_ascend`/`num_migrate` — the last
+        `compat.motmetrics` fields still raising `NotImplementedError`. These
+        switch subtypes need py-motmetrics' own event-level matcher (a
+        priority pass that preserves existing object/hypothesis pairs, then
+        LAP for the remainder, plus persistent hypothesis-side history) —
+        structurally different from the core's single continuity-biased LAP
+        pass, so this is separate, larger work.
   - [ ] Other TrackEval metrics — `IDEucl`, `TrackMAP`, `VACE`, and `JAndF`
         (J&F). J&F is DAVIS's native metric, so this also completes the DAVIS
         adapter beyond the CLEAR/Identity/HOTA it serves today.

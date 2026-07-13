@@ -517,6 +517,12 @@ struct ClearMetrics {
     /// switches count as matched), sorted descending. The basis for MT/PT/ML.
     #[pyo3(get)]
     track_ratios: Vec<f64>,
+    /// Fragmentations under py-motmetrics' definition (a present-but-unmatched
+    /// frame followed by a match, within the trajectory's tracked span only).
+    /// Distinct from `frag`, which also breaks on frames where the object is
+    /// simply absent.
+    #[pyo3(get)]
+    frag_present_only: usize,
 }
 
 #[pymethods]
@@ -559,6 +565,7 @@ impl From<clear::ClearMetrics> for ClearMetrics {
             clr_re: m.clr_re,
             clr_pr: m.clr_pr,
             track_ratios: m.track_ratios,
+            frag_present_only: m.frag_present_only,
         }
     }
 }
