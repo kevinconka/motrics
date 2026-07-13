@@ -82,12 +82,12 @@ jobs:
           uv run maturin develop --uv
           uv run pytest --cov=motrics --cov-report=xml
           cargo llvm-cov report --codecov --output-path codecov.json
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         with:
           files: ./codecov.json
           flags: rust
           token: ${{ secrets.CODECOV_TOKEN }}
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           flags: python
