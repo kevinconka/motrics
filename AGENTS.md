@@ -87,6 +87,8 @@ uv run pytest
 - **Branches:** conventional prefixes (`feat/...`, `fix/...`, `chore/...`).
 - **Be concise.** PR descriptions, commit messages, and code comments state
   the fact, not the journey — no debugging narration, no restating the diff.
+  Avoid the "statement — verdict" construction (`X — the real Y`, `X, which is
+  the actual Z`): state the fact and let it stand, don't append a judgment.
 - **Make PRs worth reading.** Prefer a table, before/after comparisons, code
   snippets, or mermaid diagram over a paragraph when it makes the change
   easier to scan — mermaid for high-level flow/process, code snippets for API
