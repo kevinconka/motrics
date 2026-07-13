@@ -38,6 +38,27 @@ def iou_matrix(
     """Pairwise IoU matrix, ``len(boxes_a)`` rows by ``len(boxes_b)`` columns."""
     ...
 
+# A 3D box: 7 floats ``[x, y, z, l, w, h, yaw]`` — centre, full extents, and
+# heading (radians) about the vertical ``y`` axis in the ``x``-``z`` ground
+# plane (KITTI / AB3DMOT convention). At ``yaw = 0``, ``l`` runs along ``x`` and
+# ``w`` along ``z``.
+Box3d = Sequence[float]
+# One set of 3D boxes: a sequence of 7-tuples, or a zero-copy ``(N, 7)`` float64
+# NumPy array.
+Boxes3d = Sequence[Box3d] | npt.NDArray[np.float64]
+
+def iou_3d(box_a: Box3d, box_b: Box3d) -> float:
+    """Volumetric intersection-over-union of two oriented 3D boxes.
+
+    The BEV footprints are intersected exactly (a convex clip) and scaled by
+    the overlap of the two height intervals.
+    """
+    ...
+
+def iou_3d_matrix(boxes_a: Boxes3d, boxes_b: Boxes3d) -> list[list[float]]:
+    """Pairwise 3D IoU matrix, ``len(boxes_a)`` rows by ``len(boxes_b)`` columns."""
+    ...
+
 class RleDict(TypedDict):
     """A pycocotools-style RLE mask dict, as read straight from a COCO/KITTI-MOTS/
     BDD-MOTS/DAVIS annotation file or returned by ``pycocotools.mask.encode``."""
