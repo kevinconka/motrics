@@ -279,6 +279,13 @@ class ClearMetrics:
         switches count as matched), sorted descending. The basis for MT/PT/ML
         under any threshold convention."""
 
+    @property
+    def frag_present_only(self) -> int:
+        """Fragmentations under py-motmetrics' definition: a present-but-unmatched
+        frame followed by a match, counted only within the trajectory's tracked
+        span. Distinct from ``frag``, which also breaks on frames where the
+        object is simply absent."""
+
     def __repr__(self) -> str: ...
 
 def compute_clear(

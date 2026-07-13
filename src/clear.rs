@@ -82,6 +82,27 @@ pub struct ClearMetrics {
     /// for MT/PT/ML under any threshold convention — TrackEval's `>0.8`/`<0.2`
     /// as used for `mt`/`pt`/`ml` here, or py-motmetrics' inclusive `>=0.8`.
     pub track_ratios: Vec<f64>,
+    /// Fragmentations under py-motmetrics' definition: a transition from an
+    /// explicit present-but-unmatched frame back to a matched one, counted only
+    /// within a trajectory's tracked span (its first match to its last).
+    /// Distinct from `frag` (TrackEval's definition, which also breaks on
+    /// frames where the object is simply absent) — see [`PresentFragState`].
+    pub frag_present_only: usize,
+}
+
+/// Per-gt-id state for py-motmetrics' `num_fragmentations`. Unlike TrackEval's
+/// `frag`, py-motmetrics only "sees" a frame where the object was explicitly
+/// listed among that frame's ids — a frame where it's simply absent leaves no
+/// trace, so a gap it introduces is invisible, not a break. It also excludes
+/// misses before the trajectory's first match and after its last.
+#[derive(Debug, Default)]
+struct PresentFragState {
+    // Has this object had at least one matched frame yet (are we inside its
+    // tracked span)?
+    started: bool,
+    // In an (uncommitted) run of present-but-unmatched frames since the last
+    // match; committed to `frag_count` only if a match follows.
+    missing: bool,
 }
 
 /// Per-gt-trajectory bookkeeping needed for MT/PT/ML and Frag, mirroring
@@ -102,6 +123,27 @@ struct TrackState {
     // caused by an empty frame does not itself count as a fragmentation.
     prev_timestep_matched: HashSet<i64>,
     motp_sum: f64,
+    // Per-gt-id bookkeeping for `frag_present_only` (py-motmetrics'
+    // `num_fragmentations`); see `PresentFragState`.
+    motmetrics_frag_state: HashMap<i64, PresentFragState>,
+    motmetrics_frag_count: usize,
+}
+
+impl TrackState {
+    /// Record one frame's outcome for a gt id that was explicitly present,
+    /// incrementing `motmetrics_frag_count` on a miss -> match resume.
+    fn record_presence(&mut self, gt_id: i64, matched: bool) {
+        let entry = self.motmetrics_frag_state.entry(gt_id).or_default();
+        if matched {
+            if entry.started && entry.missing {
+                self.motmetrics_frag_count += 1;
+            }
+            entry.started = true;
+            entry.missing = false;
+        } else if entry.started {
+            entry.missing = true;
+        }
+    }
 }
 
 // Scaled by the frame's max score so continuation always wins; mirrors TrackEval's fixed `1000 * score_mat + similarity`.
@@ -136,6 +178,9 @@ fn accumulate_frame(
     }
     if n_pred == 0 {
         m.num_misses += n_gt;
+        for &g in gt_ids {
+            state.record_presence(g, false);
+        }
         return;
     }
 
@@ -190,6 +235,9 @@ fn accumulate_frame(
         }
         matched_gts.insert(gt_id);
     }
+    for &g in gt_ids {
+        state.record_presence(g, matched_gts.contains(&g));
+    }
     state.prev_timestep_matched = matched_gts;
 
     m.num_matches += matched;
@@ -234,6 +282,7 @@ fn finalize(mut m: ClearMetrics, state: &TrackState) -> ClearMetrics {
         .values()
         .map(|&c| c.saturating_sub(1) as usize)
         .sum();
+    m.frag_present_only = state.motmetrics_frag_count;
 
     let (tp, fp, fnn, idsw) = (
         m.num_matches as f64,
@@ -429,5 +478,51 @@ mod tests {
         assert_eq!(m.num_matches, 4);
         assert_eq!((m.mt, m.pt, m.ml), (0, 1, 0));
         assert_eq!(m.frag, 1);
+        assert_eq!(m.frag_present_only, 1); // agrees with `frag` here: the gap is a present miss
+    }
+
+    #[test]
+    fn frag_present_only_ignores_pure_absence() {
+        // gt 1 matched frame 1, absent frame 2 (gt 2 keeps the frame non-empty),
+        // matched again frame 3. TrackEval's `frag` counts the resume; py-motmetrics
+        // never logs an event for gt 1 in frame 2, so it sees no gap at all.
+        let frames = [
+            frame(&[1, 2], &[A, B], &[10, 20], &[A, B]),
+            frame(&[2], &[B], &[20], &[B]),
+            frame(&[1, 2], &[A, B], &[10, 20], &[A, B]),
+        ];
+        let m = compute_clear(&frames, 0.5);
+        assert_eq!(m.frag, 1);
+        assert_eq!(m.frag_present_only, 0);
+    }
+
+    #[test]
+    fn frag_present_only_excludes_leading_and_trailing_misses() {
+        // gt 1: missed, matched, missed. Neither the leading miss (before the
+        // first match) nor the trailing miss (after the last match) is a
+        // resume, so py-motmetrics counts zero fragmentations here.
+        let frames = [
+            frame(&[1], &[A], &[10], &[B]), // present, unmatched (leading)
+            frame(&[1], &[A], &[10], &[A]), // matched
+            frame(&[1], &[A], &[10], &[B]), // present, unmatched (trailing)
+        ];
+        let m = compute_clear(&frames, 0.5);
+        assert_eq!(m.frag_present_only, 0);
+    }
+
+    #[test]
+    fn frag_present_only_counts_empty_pred_frame_gap() {
+        // gt 1 matched frame 1, present but no predictions frame 2, matched
+        // frame 3. TrackEval's `frag` does NOT count this (`prev_timestep_matched`
+        // is not reset on empty-pred frames), but py-motmetrics does: the object
+        // was explicitly present and unmatched in frame 2.
+        let frames = [
+            frame(&[1], &[A], &[10], &[A]),
+            frame(&[1], &[A], &[], &[]),
+            frame(&[1], &[A], &[10], &[A]),
+        ];
+        let m = compute_clear(&frames, 0.5);
+        assert_eq!(m.frag, 0);
+        assert_eq!(m.frag_present_only, 1);
     }
 }
