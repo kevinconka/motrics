@@ -34,6 +34,7 @@ from motrics._motrics import (
     mask_merge,
     mask_to_bbox,
     match_boxes,
+    match_boxes_3d,
     match_masks,
     version,
 )
@@ -41,6 +42,7 @@ from motrics.bdd100k import load_bdd100k, load_bdd100k_gt, preprocess_bdd100k
 from motrics.davis import load_davis, preprocess_davis
 from motrics.frames import Frames, evaluate
 from motrics.kitti import load_kitti, load_kitti_gt, preprocess_kitti
+from motrics.kitti_3d import load_kitti_3d, load_kitti_3d_gt, preprocess_kitti_3d
 from motrics.kitti_mots import (
     load_kitti_mots,
     load_kitti_mots_gt,
@@ -81,6 +83,8 @@ __all__ = [
     "load_bdd100k_gt",
     "load_davis",
     "load_kitti",
+    "load_kitti_3d",
+    "load_kitti_3d_gt",
     "load_kitti_gt",
     "load_kitti_mots",
     "load_kitti_mots_gt",
@@ -94,10 +98,12 @@ __all__ = [
     "mask_merge",
     "mask_to_bbox",
     "match_boxes",
+    "match_boxes_3d",
     "match_masks",
     "preprocess_bdd100k",
     "preprocess_davis",
     "preprocess_kitti",
+    "preprocess_kitti_3d",
     "preprocess_kitti_mots",
     "preprocess_motchallenge",
     "version",

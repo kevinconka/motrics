@@ -461,6 +461,31 @@ fn match_boxes(
     Ok(result.into())
 }
 
+/// Match two sets of oriented 3D boxes, mirroring [`match_boxes`] for 3D IoU.
+///
+/// `method` is either `"hungarian"` (optimal, maximises total IoU) or
+/// `"greedy"` (assign highest-IoU pairs first). Only pairs with IoU at or
+/// above `iou_threshold` are kept.
+#[pyfunction]
+#[pyo3(signature = (boxes_a, boxes_b, iou_threshold=0.5, method="hungarian"))]
+fn match_boxes_3d(
+    boxes_a: PyBoxes3d,
+    boxes_b: PyBoxes3d,
+    iou_threshold: f64,
+    method: &str,
+) -> PyResult<Matching> {
+    let method = parse_method(method)?;
+    let a = boxes_a.as_boxes()?;
+    let b = boxes_b.as_boxes()?;
+
+    let n_a = a.len();
+    let n_b = b.len();
+    let matrix = iou3d::iou_3d_matrix(&a, &b);
+    let result = assignment::match_boxes(&matrix, n_a, n_b, iou_threshold, method);
+
+    Ok(result.into())
+}
+
 /// Match two sets of masks, mirroring [`match_boxes`] for segmentation masks.
 ///
 /// `method` is either `"hungarian"` (optimal, maximises total IoU) or
@@ -1090,6 +1115,7 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(iou_3d, m)?)?;
     m.add_function(wrap_pyfunction!(iou_3d_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(match_boxes, m)?)?;
+    m.add_function(wrap_pyfunction!(match_boxes_3d, m)?)?;
     m.add_function(wrap_pyfunction!(match_masks, m)?)?;
     m.add_function(wrap_pyfunction!(mask_area, m)?)?;
     m.add_function(wrap_pyfunction!(mask_iou, m)?)?;
