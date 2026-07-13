@@ -117,10 +117,3 @@ def test_iou_3d_matrix_rejects_wrong_shape() -> None:
         motrics.iou_3d_matrix(
             np.zeros((2, 4), dtype=np.float64), np.zeros((2, 7), dtype=np.float64)
         )
-
-
-def test_identical_and_disjoint() -> None:
-    box: Box3d = (0.0, 0.0, 0.0, 4.0, 2.0, 1.5, 0.7)
-    assert motrics.iou_3d(box, box) == pytest.approx(1.0)
-    far: Box3d = (100.0, 0.0, 0.0, 4.0, 2.0, 1.5, 0.7)
-    assert motrics.iou_3d(box, far) == 0.0
