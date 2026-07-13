@@ -105,26 +105,6 @@ struct PresentFragState {
     missing: bool,
 }
 
-/// Record one frame's outcome for a gt id that was explicitly present,
-/// incrementing `frag_count` on a miss -> match resume.
-fn record_presence(
-    frag_state: &mut HashMap<i64, PresentFragState>,
-    frag_count: &mut usize,
-    gt_id: i64,
-    matched: bool,
-) {
-    let entry = frag_state.entry(gt_id).or_default();
-    if matched {
-        if entry.started && entry.missing {
-            *frag_count += 1;
-        }
-        entry.started = true;
-        entry.missing = false;
-    } else if entry.started {
-        entry.missing = true;
-    }
-}
-
 /// Per-gt-trajectory bookkeeping needed for MT/PT/ML and Frag, mirroring
 /// TrackEval's `gt_id_count`/`gt_matched_count`/`gt_frag_count` arrays. All keyed
 /// by gt id, so memory grows with the number of distinct objects, not frames.
@@ -147,6 +127,23 @@ struct TrackState {
     // `num_fragmentations`); see `PresentFragState`.
     motmetrics_frag_state: HashMap<i64, PresentFragState>,
     motmetrics_frag_count: usize,
+}
+
+impl TrackState {
+    /// Record one frame's outcome for a gt id that was explicitly present,
+    /// incrementing `motmetrics_frag_count` on a miss -> match resume.
+    fn record_presence(&mut self, gt_id: i64, matched: bool) {
+        let entry = self.motmetrics_frag_state.entry(gt_id).or_default();
+        if matched {
+            if entry.started && entry.missing {
+                self.motmetrics_frag_count += 1;
+            }
+            entry.started = true;
+            entry.missing = false;
+        } else if entry.started {
+            entry.missing = true;
+        }
+    }
 }
 
 // Scaled by the frame's max score so continuation always wins; mirrors TrackEval's fixed `1000 * score_mat + similarity`.
@@ -182,12 +179,7 @@ fn accumulate_frame(
     if n_pred == 0 {
         m.num_misses += n_gt;
         for &g in gt_ids {
-            record_presence(
-                &mut state.motmetrics_frag_state,
-                &mut state.motmetrics_frag_count,
-                g,
-                false,
-            );
+            state.record_presence(g, false);
         }
         return;
     }
@@ -244,13 +236,7 @@ fn accumulate_frame(
         matched_gts.insert(gt_id);
     }
     for &g in gt_ids {
-        let is_matched = matched_gts.contains(&g);
-        record_presence(
-            &mut state.motmetrics_frag_state,
-            &mut state.motmetrics_frag_count,
-            g,
-            is_matched,
-        );
+        state.record_presence(g, matched_gts.contains(&g));
     }
     state.prev_timestep_matched = matched_gts;
 
@@ -522,5 +508,21 @@ mod tests {
         ];
         let m = compute_clear(&frames, 0.5);
         assert_eq!(m.frag_present_only, 0);
+    }
+
+    #[test]
+    fn frag_present_only_counts_empty_pred_frame_gap() {
+        // gt 1 matched frame 1, present but no predictions frame 2, matched
+        // frame 3. TrackEval's `frag` does NOT count this (`prev_timestep_matched`
+        // is not reset on empty-pred frames), but py-motmetrics does: the object
+        // was explicitly present and unmatched in frame 2.
+        let frames = [
+            frame(&[1], &[A], &[10], &[A]),
+            frame(&[1], &[A], &[], &[]),
+            frame(&[1], &[A], &[10], &[A]),
+        ];
+        let m = compute_clear(&frames, 0.5);
+        assert_eq!(m.frag, 0);
+        assert_eq!(m.frag_present_only, 1);
     }
 }
