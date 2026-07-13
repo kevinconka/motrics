@@ -94,6 +94,24 @@ def test_iou_3d_matrix_numpy_matches_lists() -> None:
     assert from_numpy == from_lists
 
 
+def test_iou_3d_matrix_noncontiguous_array() -> None:
+    # A sliced view of a wider array is non-contiguous, exercising the
+    # row-by-row copy fallback (not the zero-copy slice path).
+    rng = random.Random(3)
+    a = [_random_box(rng) for _ in range(4)]
+    b = [_random_box(rng) for _ in range(4)]
+    wide = np.zeros((4, 9), dtype=np.float64)
+    wide[:, :7] = np.asarray(a, dtype=np.float64)
+    view = wide[:, :7]
+    assert not view.flags["C_CONTIGUOUS"]
+    assert motrics.iou_3d_matrix(view, b) == motrics.iou_3d_matrix(a, b)
+
+
+def test_degenerate_zero_volume_box_is_zero() -> None:
+    flat: Box3d = (0.0, 0.0, 0.0, 4.0, 2.0, 0.0, 0.0)  # zero height -> zero volume
+    assert motrics.iou_3d(flat, flat) == 0.0
+
+
 def test_iou_3d_matrix_rejects_wrong_shape() -> None:
     with pytest.raises(ValueError, match=r"shape \(N, 7\)"):
         motrics.iou_3d_matrix(
