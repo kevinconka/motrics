@@ -12,6 +12,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::iou::Bbox;
+use crate::iou3d::Box3d;
 
 /// A box coordinate convention: `xyxy` (`x1, y1, x2, y2`) or `xywh`
 /// (`x, y, width, height`). Every core function accepts either, converting
@@ -93,6 +94,44 @@ impl PyBoxes<'_> {
                         view.rows()
                             .into_iter()
                             .map(|r| to_xyxy([r[0], r[1], r[2], r[3]], format))
+                            .collect(),
+                    )),
+                }
+            }
+        }
+    }
+}
+
+/// Oriented 3D boxes for one set, accepted as either a Python sequence of
+/// 7-tuples (`[x, y, z, l, w, h, yaw]`) or a `(N, 7)` float64 NumPy array
+/// (zero-copy for a contiguous array). `Array` is tried first so a NumPy array
+/// always takes the zero-copy path.
+#[derive(FromPyObject)]
+pub enum PyBoxes3d<'py> {
+    Array(PyReadonlyArray2<'py, f64>),
+    List(Vec<Box3d>),
+}
+
+impl PyBoxes3d<'_> {
+    /// Borrow (or, for a non-contiguous array layout, copy) the boxes.
+    pub fn as_boxes(&self) -> PyResult<Cow<'_, [Box3d]>> {
+        match self {
+            PyBoxes3d::List(v) => Ok(Cow::Borrowed(v)),
+            PyBoxes3d::Array(arr) => {
+                let view = arr.as_array();
+                if view.ncols() != 7 {
+                    return Err(PyValueError::new_err(format!(
+                        "3D boxes array must have shape (N, 7), got {:?}",
+                        view.shape()
+                    )));
+                }
+                match view.to_slice() {
+                    Some(flat) => Ok(Cow::Borrowed(bytemuck::cast_slice(flat))),
+                    // Non-contiguous (e.g. a strided view): copy row by row.
+                    None => Ok(Cow::Owned(
+                        view.rows()
+                            .into_iter()
+                            .map(|r| [r[0], r[1], r[2], r[3], r[4], r[5], r[6]])
                             .collect(),
                     )),
                 }

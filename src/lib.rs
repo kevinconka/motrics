@@ -18,11 +18,13 @@ mod clear;
 mod hota;
 mod identity;
 mod iou;
+mod iou3d;
 mod mask;
 
 use assignment::Method;
-use boxes::{to_xyxy, BoxFormat, PyBoxes};
+use boxes::{to_xyxy, BoxFormat, PyBoxes, PyBoxes3d};
 use iou::Bbox;
+use iou3d::Box3d;
 
 /// Convert one `box_format` argument's worth of per-frame [`PyBoxes`] into
 /// `xyxy`, borrowing (zero-copy) wherever the format and layout allow it.
@@ -166,6 +168,31 @@ fn iou_matrix(boxes_a: PyBoxes, boxes_b: PyBoxes, box_format: &str) -> PyResult<
     let a = boxes_a.as_boxes(format)?;
     let b = boxes_b.as_boxes(format)?;
     Ok(iou::iou_matrix(&a, &b))
+}
+
+/// Volumetric intersection-over-union of two oriented 3D boxes.
+///
+/// Each box is `[x, y, z, l, w, h, yaw]`: centre, full extents, and heading
+/// (radians) about the vertical `y` axis in the `x`–`z` ground plane, the
+/// KITTI / AB3DMOT convention. At `yaw = 0`, `l` runs along `x` and `w` along
+/// `z`.
+#[pyfunction]
+fn iou_3d(box_a: Box3d, box_b: Box3d) -> f64 {
+    iou3d::iou_3d(&box_a, &box_b)
+}
+
+/// Pairwise 3D IoU matrix between two sets of oriented 3D boxes.
+///
+/// Each of `boxes_a`/`boxes_b` is a Python sequence of 7-tuples or a `(N, 7)`
+/// float64 NumPy array (zero-copy for a contiguous array); see [`iou_3d`] for
+/// the box convention.
+///
+/// Returns a list of `len(boxes_a)` rows, each with `len(boxes_b)` IoU values.
+#[pyfunction]
+fn iou_3d_matrix(boxes_a: PyBoxes3d, boxes_b: PyBoxes3d) -> PyResult<Vec<Vec<f64>>> {
+    let a = boxes_a.as_boxes()?;
+    let b = boxes_b.as_boxes()?;
+    Ok(iou3d::iou_3d_matrix(&a, &b))
 }
 
 /// A run-length-encoded binary mask, COCO/pycocotools convention: alternating
@@ -1053,6 +1080,8 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(is_debug_build, m)?)?;
     m.add_function(wrap_pyfunction!(iou_py, m)?)?;
     m.add_function(wrap_pyfunction!(iou_matrix, m)?)?;
+    m.add_function(wrap_pyfunction!(iou_3d, m)?)?;
+    m.add_function(wrap_pyfunction!(iou_3d_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(match_boxes, m)?)?;
     m.add_function(wrap_pyfunction!(match_masks, m)?)?;
     m.add_function(wrap_pyfunction!(mask_area, m)?)?;
