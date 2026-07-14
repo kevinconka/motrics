@@ -3,6 +3,7 @@
 import math
 
 import motrics
+import numpy as np
 import pytest
 
 
@@ -82,3 +83,19 @@ def test_unknown_method_raises() -> None:
 def test_repr() -> None:
     boxes = [_box(0.0)]
     assert "Matching(" in repr(motrics.match_boxes_3d(boxes, boxes))
+
+
+def test_numpy_boxes_match_list_of_tuples() -> None:
+    boxes = [_box(0.0), _box(10.0)]
+    from_list = motrics.match_boxes_3d(boxes, boxes)
+    from_numpy = motrics.match_boxes_3d(
+        np.asarray(boxes, dtype=np.float64), np.asarray(boxes, dtype=np.float64)
+    )
+    assert from_numpy.matches == from_list.matches
+    assert from_numpy.scores == pytest.approx(from_list.scores)
+
+
+def test_numpy_wrong_shape_raises() -> None:
+    bad = np.zeros((2, 4), dtype=np.float64)
+    with pytest.raises(ValueError, match=r"shape \(N, 7\)"):
+        motrics.match_boxes_3d(bad, bad)

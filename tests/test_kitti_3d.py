@@ -62,6 +62,18 @@ def test_load_kitti_3d_gt_separates_dontcare_regions(tmp_path: Path) -> None:
     assert ignore == {1: [(20.0, 20.0, 30.0, 30.0)]}
 
 
+def test_load_kitti_3d_gt_drops_negative_ids(tmp_path: Path) -> None:
+    text = "1 -1 Pedestrian 0 0 0 0 0 10 10 1.8 0.6 0.6 0 1.8 10 0\n"
+    gt, _ignore = motrics.load_kitti_3d_gt(_write(tmp_path, "gt.txt", text))
+    assert gt == {}
+
+
+def test_load_kitti_3d_gt_drops_unknown_class(tmp_path: Path) -> None:
+    text = "1 1 Misc-not-a-real-class 0 0 0 0 0 10 10 1.8 0.6 0.6 0 1.8 10 0\n"
+    gt, _ignore = motrics.load_kitti_3d_gt(_write(tmp_path, "gt.txt", text))
+    assert gt == {}
+
+
 def test_load_kitti_3d_gt_reads_truncation_and_occlusion(tmp_path: Path) -> None:
     text = "1 1 Pedestrian 1 3 0 0 0 10 10 1.8 0.6 0.6 0 1.8 10 0\n"
     gt, _ignore = motrics.load_kitti_3d_gt(_write(tmp_path, "gt.txt", text))
