@@ -14,7 +14,7 @@ uv run python benchmarks/benchmark.py    # --repeats N, --smoke
 
 Parity is a hard gate (fails on any mismatch beyond assignment tie-breaking);
 timing is reported per sequence and as a summary. Speed figures live in the
-top-level [README](../README.md#benchmarks) — the comparison is conservative
+top-level [README](../README.md#benchmarks). The comparison is conservative
 (TrackEval is handed pre-aligned arrays), so real-world gains are typically
 larger.
 
@@ -24,8 +24,8 @@ Exact numeric parity is also checked on synthetic sequences in
 ## CI
 
 Every pull request runs this benchmark (real data cached across runs) and
-posts the results as a sticky comment (updated in place on each push, not a
-new comment every time) — see the `benchmark` job in
+posts the results as a sticky comment, updated in place on each push rather
+than a new comment every time. See the `benchmark` job in
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). It's informational,
 not a merge gate: CI runner timing has real variance, so treat the numbers as
 a rough signal rather than a precise regression check. `--markdown PATH`
@@ -57,6 +57,6 @@ uv run python benchmarks/plot_speedup.py
   `tests/test_parity.py` still enforces exact 1e-9 parity on tie-free synthetic
   data, which is the real bug-catching gate.
 - **Measured speedups (MOT17-train, release build):** motrics runs roughly
-  3–9× faster than TrackEval and 13–30× faster than py-motmetrics. Exact ratios
-  vary by sequence density and machine — rerun the benchmark for current numbers
-  rather than trusting these as fixed.
+  3–9× faster than TrackEval and 13–30× faster than py-motmetrics. Exact
+  ratios vary by sequence density and machine; rerun the benchmark for
+  current numbers rather than trusting these as fixed.
