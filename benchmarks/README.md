@@ -57,6 +57,7 @@ uv run python benchmarks/plot_speedup.py
   `tests/test_parity.py` still enforces exact 1e-9 parity on tie-free synthetic
   data, which is the real bug-catching gate.
 - **Measured speedups (MOT17-train, release build):** motrics runs roughly
-  3–9× faster than TrackEval and 13–30× faster than py-motmetrics. Exact
-  ratios vary by sequence density and machine; rerun the benchmark for
-  current numbers rather than trusting these as fixed.
+  7–9× faster than TrackEval and 12–16× faster than py-motmetrics, matching
+  the chart data in `plot_speedup.py`. Exact ratios vary by sequence density
+  and machine; rerun the benchmark for current numbers rather than trusting
+  these as fixed.
