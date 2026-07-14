@@ -1,8 +1,9 @@
 <h1 align="center">motrics</h1>
 
 <p align="center">
-  <em>An extremely fast MOT and HOTA metrics library, written in Rust — CLEAR
-  (MOTA/MOTP), Identity (IDF1), and HOTA, with an ergonomic Python API.</em>
+  <em>An extremely fast MOT and HOTA metrics library, written in Rust:
+  CLEAR (MOTA/MOTP), Identity (IDF1), and HOTA, with an ergonomic Python
+  API.</em>
 </p>
 
 <p align="center">
@@ -21,19 +22,19 @@
     <img alt="Bar chart: motrics computes CLEAR+Identity+HOTA in 770ms vs TrackEval's 5930ms (7.7x faster), and CLEAR+Identity in 443ms vs py-motmetrics' 6211ms (14.0x faster)." src="benchmarks/assets/speedup-light.svg" width="480">
   </picture>
 </p>
-<p align="center"><i>MOT17-train, wall time, from a live CI run — see <a href="#benchmarks">Benchmarks</a>.</i></p>
+<p align="center"><i>MOT17-train, wall time, from a live CI run. See <a href="#benchmarks">Benchmarks</a>.</i></p>
 
 ## Highlights
 
-- ⚡ **Extremely fast** — Rust core, ~7–9× faster than TrackEval and ~12–16×
-  faster than py-motmetrics on real MOT17 data.
-- 🎯 **Numerically validated** — exact parity with TrackEval on CLEAR,
-  Identity, and HOTA, checked in CI.
-- 🔄 **Drop-in migration** — swap one import to replace py-motmetrics; evaluate
-  a MOTChallenge benchmark without installing TrackEval.
-- 🐍 **Ergonomic, typed Python API** — PEP 561, `numpy` the only required
-  runtime dependency.
-- 🔢 **Flexible box input** — `xyxy` or `xywh`, and a zero-copy read path for
+- **Fast.** Rust core; see [Benchmarks](#benchmarks) for numbers against
+  TrackEval and py-motmetrics.
+- **Validated.** Bit-exact parity with TrackEval on CLEAR, Identity, and HOTA,
+  checked in CI.
+- **Drop-in migration.** Swap one import to replace py-motmetrics or
+  TrackEval.
+- **Typed Python API.** PEP 561, `numpy` the only required runtime
+  dependency.
+- **Flexible box input.** `xyxy` or `xywh`, and a zero-copy read path for
   contiguous NumPy arrays.
 
 ## Install
@@ -71,9 +72,30 @@ print(result.clear.mota, result.identity.idf1, result.hota.hota)
 - Want TrackEval's exact reported numbers? Use `load_motchallenge_gt` +
   `preprocess_motchallenge` instead of `load_motchallenge` + `align_frames`.
 
+## Datasets
+
+Each dataset gets a small adapter (ingest + preprocessing + similarity) on
+top of the shared metric core. All are validated against TrackEval's own
+preprocessing:
+
+| Dataset | Box/mask | Similarity | Load                                     |
+| ------- | -------- | ---------- | ----------------------------------------- |
+| MOTChallenge / DanceTrack | box | IoU | `load_motchallenge(_gt)` |
+| KITTI 2D-box | box | IoU | `load_kitti(_gt)` |
+| KITTI-MOTS | mask (RLE) | mask IoU | `load_kitti_mots(_gt)` |
+| DAVIS (unsupervised) | indexed PNG mask | mask IoU | `load_davis` |
+| BDD100K | box (JSON) | IoU | `load_bdd100k(_gt)` |
+| KITTI-3D | oriented 3D box | volumetric IoU | `load_kitti_3d(_gt)` |
+
+Each adapter pairs with a matching `preprocess_*` function that applies the
+dataset's TrackEval preprocessing rules (distractor classes, occlusion/
+truncation thresholds, ignore regions, ...) and returns arguments for
+`compute_clear`/`compute_identity`/`compute_hota` or their
+`_from_similarity` counterparts.
+
 ## Migrating from py-motmetrics or TrackEval
 
-Swap one import — the rest of your code is unchanged.
+Swap one import, the rest of your code is unchanged.
 
 <details>
 <summary>py-motmetrics</summary>
@@ -82,7 +104,7 @@ Swap one import — the rest of your code is unchanged.
 # before
 import motmetrics as mm
 
-# after — same code, motrics underneath
+# after: same code, motrics underneath
 import motrics.compat.motmetrics as mm
 
 acc = mm.MOTAccumulator(auto_id=True)
@@ -95,11 +117,11 @@ summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="a
 
 `pip install motrics[compat]` (pulls in pandas, needed only for this subpackage).
 
-All of `motmetrics.metrics.motchallenge_metrics` is supported: `mota`, `motp`,
-`idf1`, `idp`, `idr`, `recall`, `precision`, `num_false_positives`,
-`num_misses`, `num_switches`, `num_unique_objects`, `mostly_tracked`,
-`partially_tracked`, `mostly_lost`, `num_fragmentations`, `num_transfer`,
-`num_ascend`, `num_migrate`.
+The full `motmetrics.metrics.motchallenge_metrics` field set is supported:
+`mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`,
+`num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects`,
+`mostly_tracked`, `partially_tracked`, `mostly_lost`, `num_fragmentations`,
+`num_transfer`, `num_ascend`, `num_migrate`.
 
 See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
 for what else differs (e.g. no `events`/`mot_events` DataFrame).
@@ -113,7 +135,7 @@ for what else differs (e.g. no `events`/`mot_events` DataFrame).
 # before
 import trackeval
 
-# after — same code, motrics underneath
+# after: same code, motrics underneath
 import motrics.compat.trackeval as trackeval
 
 eval_config = trackeval.Evaluator.get_default_eval_config()
@@ -131,13 +153,13 @@ print(results["MotChallenge2DBox"]["my_tracker"]["COMBINED_SEQ"]["pedestrian"]["
 ```
 
 Same class names, config keys, directory/seqmap conventions, and result shape
-as real TrackEval — no `trackeval`/`scipy` install required, only `numpy` (a
+as real TrackEval. No `trackeval`/`scipy` install required, only `numpy` (a
 core dependency already).
 
 | | |
 | --- | --- |
-| ✅ Supported | `HOTA`, `Identity`, and `CLEAR`'s full field set (`MOTA`/`MOTP`/`MODA`/`sMOTA`/`MOTAL`, `MT`/`PT`/`ML`/`Frag`, `CLR_Re`/`CLR_Pr`/`MTR`/`PTR`/`MLR`/`CLR_F1`/`FP_per_frame`) — bit-exact vs real TrackEval |
-| ❌ Not yet | Parallel evaluation · `BREAK_ON_ERROR` config · printing/plotting · zipped input · `DO_PREPROC=False` · `MOT15` · `IDEucl`/`JAndF`/`TrackMAP`/`VACE` |
+| ✅ Supported | `HOTA`, `Identity`, and `CLEAR`'s full field set (`MOTA`/`MOTP`/`MODA`/`sMOTA`/`MOTAL`, `MT`/`PT`/`ML`/`Frag`, `CLR_Re`/`CLR_Pr`/`MTR`/`PTR`/`MLR`/`CLR_F1`/`FP_per_frame`), bit-exact vs real TrackEval |
+| ❌ Not yet | Parallel evaluation, `BREAK_ON_ERROR` config, printing/plotting, zipped input, `DO_PREPROC=False`, `MOT15`, `IDEucl`/`JAndF`/`TrackMAP`/`VACE` |
 
 See [`python/motrics/compat/trackeval/`](python/motrics/compat/trackeval/)
 for the full list of what differs from real TrackEval.
@@ -145,9 +167,9 @@ for the full list of what differs from real TrackEval.
 </details>
 
 <details>
-<summary>Metric name map — TrackEval / py-motmetrics / motrics' native API</summary>
+<summary>Metric name map: TrackEval / py-motmetrics / motrics' native API</summary>
 
-Using `motrics`' own API directly (faster than the compat layer — no
+Using `motrics`' own API directly (faster than the compat layer, no
 per-frame Python bookkeeping)? Here's how the field names line up:
 
 | Concept                              | TrackEval                   | py-motmetrics          | `motrics` (native)                         |
@@ -159,7 +181,7 @@ per-frame Python bookkeeping)? Here's how the field names line up:
 | MOTA / MOTP                           | `MOTA` / `MOTP`             | `mota` / `motp`        | `ClearMetrics.mota` / `.motp`              |
 | Identity TP / FP / FN                 | `IDTP`/`IDFP`/`IDFN`        | `idtp`/`idfp`/`idfn`   | `IdentityMetrics.idtp`/`.idfp`/`.idfn`     |
 | IDF1 / IDP / IDR                      | `IDF1`/`IDP`/`IDR`          | `idf1`/`idp`/`idr`     | `IdentityMetrics.idf1`/`.idp`/`.idr`       |
-| HOTA / DetA / AssA / LocA             | `HOTA`/`DetA`/`AssA`/`LocA` | — (not in motmetrics)  | `HotaMetrics.hota`/`.deta`/`.assa`/`.loca` |
+| HOTA / DetA / AssA / LocA             | `HOTA`/`DetA`/`AssA`/`LocA` | (not in motmetrics)    | `HotaMetrics.hota`/`.deta`/`.assa`/`.loca` |
 
 </details>
 
@@ -173,8 +195,8 @@ of this README):
 | TrackEval     | CLEAR + Identity + HOTA | ~7–9×   |
 | py-motmetrics | CLEAR + Identity        | ~12–16× |
 
-Numbers are illustrative and machine-dependent — see the CI benchmark comment
-on any PR for a live measurement. See
+Numbers are illustrative and machine-dependent. See the CI benchmark comment
+on any PR for a live measurement, and
 [`benchmarks/README.md`](benchmarks/README.md) for methodology and how to run
 it yourself.
 
@@ -182,172 +204,50 @@ it yourself.
 <summary>Roadmap</summary>
 
 - [x] Project scaffolding (build, lint, packaging, CI)
-- [x] Published to PyPI (`pip install motrics`), automated tag-and-release on
-      every `Cargo.toml` version bump (see `.github/workflows/release-tag.yml`)
-- [x] Bounding-box IoU + assignment (Hungarian/greedy) primitives
-- [x] CLEAR metrics (MOTA, MOTP, ID switches, FP/FN)
-- [x] Identity metrics (IDF1 / IDP / IDR)
+- [x] Published to PyPI, automated tag-and-release on every `Cargo.toml`
+      version bump
+- [x] Box IoU + assignment (Hungarian/greedy) primitives
+- [x] CLEAR metrics: MOTA/MOTP, ID switches, FP/FN, MT/PT/ML, fragmentations,
+      and the derived MODA/sMOTA/MOTAL/CLR_Re/CLR_Pr fields
+- [x] Identity metrics (IDF1/IDP/IDR)
 - [x] HOTA (DetA, AssA, alpha sweep)
-- [x] MOTChallenge ingest + integration tests
-- [x] TrackEval numeric parity tests (CLEAR / Identity / HOTA)
-- [x] Benchmark & parity infrastructure vs **TrackEval** and **py-motmetrics**,
-      on real MOTChallenge data, validated in CI.
-  - [x] Zero-copy NumPy input path (see "broaden core inputs" below).
-- [x] Replace TrackEval / py-motmetrics, not just benchmark against them:
-  - [x] Precomputed-similarity core inputs (`compute_clear_from_similarity`,
-        `compute_identity_from_similarity`) — the piece `compat.motmetrics`
-        needed, and the first slice of "broaden core inputs" below.
-  - [x] `motrics.compat.motmetrics` — a drop-in `MOTAccumulator` replacement.
-  - [x] Migration guide + metric-name map (see above).
-  - [x] MOTChallenge ingest with TrackEval-parity preprocessing
-        (`load_motchallenge_gt` + `preprocess_motchallenge`: distractor-class
-        removal, pedestrian-only, "do not consider" rows dropped) — validated
-        against TrackEval's own `get_preprocessed_seq_data`, and now what the
-        real-data benchmark uses. The enabling piece for `compat.trackeval`.
-  - [x] `motrics.compat.trackeval` — a drop-in for TrackEval's
-        `Evaluator`/`datasets.MotChallenge2DBox`/`metrics.{HOTA,CLEAR,Identity}`
-        (same class names, config keys, and result shape); see above for
-        what's out of scope (parallel eval, full `CLEAR` field set, other
-        metrics).
-  - [x] Broaden core inputs further — `box_format="xywh"` alongside the
-        default `xyxy`, and a zero-copy read path for contiguous `(N, 4)`
-        float64 NumPy arrays, on `compute_clear`/`compute_identity`/
-        `compute_hota`/`iou_matrix`/`match_boxes`. `numpy` is now the one
-        required runtime dependency of the core.
-- [x] Ergonomic native API — `Frames` bundles one side's ids/boxes (ground
-      truth or predictions) so the common case isn't four parallel lists
-      retyped per metric; `evaluate()` takes two `Frames` and returns CLEAR +
-      Identity + HOTA together, computing the gt/pred similarity matrix once
-      and sharing it across all three (`compute_clear`/`compute_identity`/
-      `compute_hota` called separately each build their own). The flat
-      `compute_clear`/`compute_identity`/`compute_hota` functions are
-      unchanged, for single-metric use.
-  - [x] Streaming accumulator — `Accumulator.update()` per frame,
-        `compute()` at the end, the shape both py-motmetrics and torchmetrics
-        use, for online evaluation or sequences too large to hold fully in
-        memory. Covers CLEAR + Identity: both fold into bounded per-object
-        state (last hypothesis id per gt for CLEAR; per-track counts + a
-        co-occurrence map for Identity), so memory is independent of sequence
-        length. HOTA is excluded by design — its alpha sweep is a
-        whole-sequence computation, so it stays on the batch `evaluate()` /
-        `compute_hota` path. The batch functions now run through the same
-        accumulators, so streaming and batch results are bit-identical.
-- [ ] Metric completeness — the metric field set a drop-in replacement needs to
-      reproduce a full MOTChallenge results table, tracked separately from the
-      dataset adapters below since it's core-metric work, not ingest:
-  - [x] Extended CLEAR fields — `MT`/`PT`/`ML` (mostly-/partially-/mostly-lost
-        trajectory counts), `Frag` (fragmentations), and the derived
-        `MODA`/`sMOTA`/`MOTAL`/`CLR_Re`/`CLR_Pr` scores. `ClearMetrics` now
-        carries per-trajectory bookkeeping (keyed by object id, so memory still
-        grows with objects, not frames), bit-exact vs TrackEval and shared by
-        the batch and streaming paths. `compat.trackeval`'s `CLEAR` now exposes
-        the full field set (`MT`/`PT`/`ML`/`Frag` plus every ratio TrackEval
-        reports). The `compat.motmetrics` trajectory fields use py-motmetrics'
-        different thresholds/fragmentation definition, so they fold into the
-        next item.
-  - [x] Per-trajectory `motmetrics` counts — `mostly_tracked`/
-        `partially_tracked`/`mostly_lost`, wired into `compat.motmetrics` from
-        the core's new per-trajectory `track_ratios` (matched-frame fraction per
-        object) under py-motmetrics' inclusive `>=0.8`/`<0.2` bounds, validated
-        against real py-motmetrics.
-  - [x] `num_fragmentations` — the core now also tracks `frag_present_only`
-        alongside `frag`: py-motmetrics only breaks a trajectory on a frame
-        where the object was explicitly present but unmatched (a logged
-        miss), unlike TrackEval's `frag`, which also breaks on frames where
-        the object is simply absent; both are computed from the same
-        per-frame matching pass, validated against real py-motmetrics.
-  - [x] `num_transfer`/`num_ascend`/`num_migrate` — the last
-        `compat.motmetrics` fields, all supported now. A new core function
-        (`compute_motmetrics_switch_events`) reproduces py-motmetrics' own
-        event-level matcher: a priority pass that preserves existing
-        object/hypothesis pairs, then LAP for the remainder, plus persistent
-        hypothesis-side history (`res_m`/`hypHistory`) — structurally
-        different from `ClearMetrics`' single continuity-biased LAP pass, so
-        it lives alongside it rather than reusing it. Validated bit-exact
-        against real py-motmetrics.
-  - [ ] Other TrackEval metrics — `IDEucl`, `TrackMAP`, `VACE`, and `JAndF`
-        (J&F). J&F is DAVIS's native metric, so this also completes the DAVIS
-        adapter beyond the CLEAR/Identity/HOTA it serves today.
-  - [ ] Remaining `compat.trackeval` `Evaluator` behaviors — parallel
-        evaluation, printing/plotting output, zipped input, `DO_PREPROC=False`,
-        `MOT15`, and `BREAK_ON_ERROR`.
-- [x] Pluggable dataset-adapter layer — one metric core, one small adapter per
-      benchmark (ingest + preprocessing + similarity), added incrementally:
-  - [x] DanceTrack — no adapter code needed. Its `gt.txt`/results format is
-        byte-for-byte MOTChallenge's (fixed class=1/consider=1 columns), and
-        TrackEval evaluates it via plain `MotChallenge2DBox` with no
-        DanceTrack-specific preprocessing branch. `load_motchallenge_gt` +
-        `preprocess_motchallenge` already handle it — confirmed by a
-        round-trip test against TrackEval's real preprocessing and metrics.
-  - [x] KITTI 2D-box — `load_kitti`/`load_kitti_gt` + `preprocess_kitti`
-        replicate TrackEval's `Kitti2DBox` preprocessing (per-class
-        evaluation, `person`/`van` distractors, occlusion/truncation
-        thresholds, min-height and `DontCare`-region filtering for unmatched
-        predictions), validated against TrackEval's own
-        `get_preprocessed_seq_data`.
-  - [x] Mask-IoU similarity kernel (KITTI-MOTS, BDD-MOTS, DAVIS) — `Mask`,
-        `mask_iou`/`mask_iou_matrix`/`mask_area`/`mask_decode`/`mask_encode`/
-        `mask_merge`/`mask_to_bbox`, a from-scratch Rust port of pycocotools'
-        RLE codec, a direct run-based intersection/union sweep (no
-        dense-array decode), and the `merge`/`toBbox` primitives TrackEval's
-        real KITTI-MOTS/MOTSChallenge/RobMOTS adapters need for ignore-region
-        unioning and size-based filtering. Includes the `is_crowd`/IoA
-        semantics TrackEval's mask datasets use, spelled `is_crowd`
-        consistently on both `mask_iou` and `mask_iou_matrix` (matching this
-        library's own naming convention, rather than pycocotools' `iscrowd`).
-        Accepts pycocotools' own RLE dicts directly (`{"size":
-        [h, w], "counts": ...}`, compressed `str`/`bytes` or already-decoded
-        run lengths — no `pycocotools` install required), validated
-        byte-for-byte and numerically against a real `pycocotools` build.
-        This is the similarity kernel (plus the two extra primitives those
-        adapters specifically need) the mask-based dataset adapters below
-        build on.
-  - [x] KITTI-MOTS — `load_kitti_mots`/`load_kitti_mots_gt` +
-        `preprocess_kitti_mots` replicate TrackEval's `KittiMOTS`
-        preprocessing (per-class evaluation, gt/prediction matching by mask
-        IoU, ignore-region-covered unmatched predictions dropped — no
-        distractor classes or occlusion/truncation thresholds here, unlike
-        KITTI 2D-box), validated against TrackEval's own
-        `get_preprocessed_seq_data`. Since there's no core `compute_*` mask
-        overload, preprocessing returns ids plus a precomputed similarity
-        matrix for the `compute_*_from_similarity` functions. Also adds
-        `match_masks`, a mask-IoU sibling to `match_boxes` sharing the same
-        Hungarian/greedy assignment core.
-  - [x] DAVIS (unsupervised) — `load_davis` + `preprocess_davis` read the
-        indexed-PNG mask format and pair a ground-truth and tracker sequence
-        into the mask-IoU similarity `compute_*_from_similarity` take, matching
-        TrackEval's `DAVIS`. Single "general" class, no detection removal; void
-        regions are parsed but — faithful to TrackEval, which scores before
-        re-masking the (metric-unused) tracker dets — do not change the
-        numbers, validated against TrackEval's own `get_preprocessed_seq_data`
-        and metric classes.
-  - [x] BDD100K — `load_bdd100k`/`load_bdd100k_gt` + `preprocess_bdd100k`
-        replicate TrackEval's `BDD100K` preprocessing: JSON ingest, the eight
-        classes evaluated separately, crowd-marked and distractor-category
-        (`other person`/`trailer`/`other vehicle`) ground truth pulled out as
-        ignore regions, and unmatched predictions mostly inside a crowd-ignore
-        region dropped. Box-based (box IoU, not the mask kernel), so it reuses
-        the existing box-IoU path and returns
-        `(gt_ids, gt_boxes, pred_ids, pred_boxes)` for the `compute_*`
-        functions; validated against TrackEval's own `get_preprocessed_seq_data`.
-  - [x] 3D similarity kernel (KITTI-3D) — `iou_3d`/`iou_3d_matrix` compute
-        volumetric IoU of oriented boxes (BEV footprint intersected exactly
-        with a convex clip, scaled by height overlap), validated against an
-        independent shapely reference over random rotated boxes.
-        `load_kitti_3d`/`load_kitti_3d_gt` + `preprocess_kitti_3d` and
-        `match_boxes_3d` (a 3D-IoU sibling to `match_boxes`) then read
-        KITTI's tracking format, which already carries a 3D box on the same
-        rows the 2D adapter uses, and apply `preprocess_kitti`'s own
-        TrackEval-validated rules (per-class evaluation, distractors,
-        occlusion/truncation, min-height/`DontCare` filtering) scored by 3D
-        IoU instead of 2D IoU. TrackEval has no KITTI-3D dataset to validate
-        against directly, so this is checked by reducing the 2D adapter's
-        own parity-tested scenario to 3D and asserting the same keep/drop
-        decisions come out. Like KITTI-MOTS, preprocessing returns ids plus
-        a precomputed similarity matrix for the `compute_*_from_similarity`
-        functions.
+- [x] MOTChallenge ingest, integration tests, TrackEval numeric parity tests
+- [x] Benchmark & parity infrastructure vs TrackEval and py-motmetrics on real
+      MOTChallenge data, validated in CI
+- [x] Zero-copy NumPy input path; `xyxy`/`xywh` box formats
+- [x] Precomputed-similarity core inputs (`compute_*_from_similarity`)
+- [x] `motrics.compat.motmetrics`: drop-in `MOTAccumulator`, full
+      `motchallenge_metrics` field set including switch subtypes
+      (`num_transfer`/`num_ascend`/`num_migrate`)
+- [x] `motrics.compat.trackeval`: drop-in `Evaluator`/`MotChallenge2DBox`/
+      `HOTA`/`CLEAR`/`Identity`
+- [x] Ergonomic native API: `Frames`, `evaluate()`, streaming `Accumulator`
+      for CLEAR + Identity
+- [x] Mask-IoU similarity kernel (RLE codec, ignore-region/IoA semantics) for
+      mask-based adapters
+- [x] 3D IoU similarity kernel (oriented boxes) for KITTI-3D
+- [x] Dataset adapters: DanceTrack, KITTI 2D-box, KITTI-MOTS, DAVIS, BDD100K,
+      KITTI-3D (see [Datasets](#datasets))
+- [ ] Other TrackEval metrics: `IDEucl`, `TrackMAP`, `VACE`, `JAndF` (DAVIS's
+      native metric)
+- [ ] Remaining `compat.trackeval` `Evaluator` behaviors: parallel
+      evaluation, printing/plotting, zipped input, `DO_PREPROC=False`,
+      `MOT15`, `BREAK_ON_ERROR`
 
 </details>
+
+## Acknowledgments
+
+motrics reimplements the evaluation protocols and metric definitions of two
+projects. All credit for the underlying methodology belongs to their
+authors; motrics is a from-scratch Rust port, not a wrapper around either.
+
+- [TrackEval](https://github.com/JonathonLuiten/TrackEval): the reference
+  implementation for CLEAR, Identity, and HOTA, and for every dataset
+  adapter's preprocessing rules. motrics is validated against it in CI.
+- [py-motmetrics](https://github.com/cheind/py-motmetrics): the reference
+  implementation for the MOTChallenge metric set and the `MOTAccumulator`
+  API that `compat.motmetrics` mirrors.
 
 ## Contributing
 
