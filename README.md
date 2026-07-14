@@ -174,15 +174,8 @@ per-frame Python bookkeeping)? Here's how the field names line up:
 ## Benchmarks
 
 On real MOT17 data, release build, end-to-end from raw boxes (chart at the top
-of this README):
-
-| motrics vs…   | Metrics                | Speedup |
-| ------------- | ----------------------- | ------- |
-| TrackEval     | CLEAR + Identity + HOTA | ~7–9×   |
-| py-motmetrics | CLEAR + Identity        | ~12–16× |
-
-Numbers are illustrative and machine-dependent. See the CI benchmark comment
-on any PR for a live measurement, and
+of this README). Numbers are illustrative and machine-dependent. See the CI
+benchmark comment on any PR for a live measurement, and
 [`benchmarks/README.md`](benchmarks/README.md) for methodology and how to run
 it yourself.
 
