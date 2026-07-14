@@ -30,10 +30,6 @@
   checked in CI.
 - **Drop-in migration.** Swap one import to replace py-motmetrics or
   TrackEval.
-- **Typed Python API.** PEP 561, `numpy` the only required runtime
-  dependency.
-- **Flexible box input.** `xyxy` or `xywh`, and a zero-copy read path for
-  contiguous NumPy arrays.
 
 ## Install
 
@@ -67,8 +63,6 @@ print(result.clear.mota, result.identity.idf1, result.hota.hota)
   the same four arguments directly, no `Frames` needed.
 - Boxes: `xyxy` by default, `box_format="xywh"` for the alternative; NumPy
   `(N, 4)` arrays accepted too.
-- Want TrackEval's exact reported numbers? Use `load_motchallenge_gt` +
-  `preprocess_motchallenge` instead of `load_motchallenge` + `align_frames`.
 
 ## Datasets
 
@@ -84,12 +78,6 @@ preprocessing:
 | DAVIS (unsupervised) | indexed PNG mask | mask IoU | `load_davis` |
 | BDD100K | box (JSON) | IoU | `load_bdd100k(_gt)` |
 | KITTI-3D | oriented 3D box | volumetric IoU | `load_kitti_3d(_gt)` |
-
-Each adapter pairs with a matching `preprocess_*` function that applies the
-dataset's TrackEval preprocessing rules (distractor classes, occlusion/
-truncation thresholds, ignore regions, ...) and returns arguments for
-`compute_clear`/`compute_identity`/`compute_hota` or their
-`_from_similarity` counterparts.
 
 ## Migrating from py-motmetrics or TrackEval
 
