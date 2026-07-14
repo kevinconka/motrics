@@ -20,6 +20,7 @@ mod identity;
 mod iou;
 mod iou3d;
 mod mask;
+mod motmetrics_switches;
 
 use assignment::Method;
 use boxes::{to_xyxy, BoxFormat, PyBoxes, PyBoxes3d};
@@ -667,6 +668,64 @@ fn compute_clear_from_similarity(
     Ok(clear::compute_clear_from_similarity(&frames, threshold).into())
 }
 
+/// `py-motmetrics`' switch-subtype event counts over a sequence.
+///
+/// Distinct from [`ClearMetrics::num_switches`], which is object-centric ("this
+/// gt object changed hypothesis id"): these are hypothesis-centric ("this
+/// hypothesis id changed which object it covers"), from
+/// `motmetrics.mot.MOTAccumulator`'s own two-stage matcher rather than the
+/// core's continuity-biased single assignment.
+#[pyclass(frozen)]
+struct MotMetricsSwitchEvents {
+    /// A hypothesis id switched which object it covers.
+    #[pyo3(get)]
+    num_transfer: usize,
+    /// A `num_transfer` where the new hypothesis id had never matched before.
+    #[pyo3(get)]
+    num_ascend: usize,
+    /// A `num_transfer` where the object had never been matched before.
+    #[pyo3(get)]
+    num_migrate: usize,
+}
+
+impl From<motmetrics_switches::SwitchEvents> for MotMetricsSwitchEvents {
+    fn from(e: motmetrics_switches::SwitchEvents) -> Self {
+        MotMetricsSwitchEvents {
+            num_transfer: e.num_transfer,
+            num_ascend: e.num_ascend,
+            num_migrate: e.num_migrate,
+        }
+    }
+}
+
+/// Compute `py-motmetrics`' `num_transfer`/`num_ascend`/`num_migrate` from
+/// precomputed per-frame similarity matrices.
+///
+/// Same input convention as [`compute_clear_from_similarity`], but matched
+/// with `motmetrics.mot.MOTAccumulator`'s own two-stage algorithm (assuming
+/// the default `max_switch_time=inf`) instead of the core's continuity-biased
+/// assignment, since these three fields are only meaningful under that
+/// specific matcher.
+#[pyfunction]
+#[pyo3(signature = (gt_ids, pred_ids, similarity, threshold=0.5))]
+fn compute_motmetrics_switch_events(
+    gt_ids: Vec<Vec<i64>>,
+    pred_ids: Vec<Vec<i64>>,
+    similarity: Vec<Vec<Vec<f64>>>,
+    threshold: f64,
+) -> PyResult<MotMetricsSwitchEvents> {
+    let clear_frames = build_sim_frames(&gt_ids, &pred_ids, &similarity)?;
+    let frames: Vec<motmetrics_switches::SimFrame> = clear_frames
+        .iter()
+        .map(|f| motmetrics_switches::SimFrame {
+            gt_ids: f.gt_ids,
+            pred_ids: f.pred_ids,
+            similarity: f.similarity,
+        })
+        .collect();
+    Ok(motmetrics_switches::compute_switch_events_from_similarity(&frames, threshold).into())
+}
+
 /// Accumulated Identity metrics (IDF1/IDP/IDR) over a sequence.
 #[pyclass(frozen)]
 struct IdentityMetrics {
@@ -1127,6 +1186,7 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Mask>()?;
     m.add_function(wrap_pyfunction!(compute_clear, m)?)?;
     m.add_function(wrap_pyfunction!(compute_clear_from_similarity, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_motmetrics_switch_events, m)?)?;
     m.add_function(wrap_pyfunction!(compute_identity, m)?)?;
     m.add_function(wrap_pyfunction!(compute_identity_from_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(compute_hota, m)?)?;
@@ -1136,6 +1196,7 @@ fn _motrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AccumulatorResult>()?;
     m.add_class::<Matching>()?;
     m.add_class::<ClearMetrics>()?;
+    m.add_class::<MotMetricsSwitchEvents>()?;
     m.add_class::<IdentityMetrics>()?;
     m.add_class::<HotaMetrics>()?;
     m.add_class::<EvaluationResult>()?;

@@ -338,6 +338,45 @@ def compute_clear_from_similarity(
     """
     ...
 
+class MotMetricsSwitchEvents:
+    """``py-motmetrics``' switch-subtype event counts over a sequence.
+
+    Distinct from ``ClearMetrics.num_switches``, which is object-centric
+    ("this gt object changed hypothesis id"): these are hypothesis-centric
+    ("this hypothesis id changed which object it covers"), from
+    ``motmetrics.mot.MOTAccumulator``'s own two-stage matcher rather than the
+    core's continuity-biased single assignment.
+    """
+
+    @property
+    def num_transfer(self) -> int:
+        """A hypothesis id switched which object it covers."""
+
+    @property
+    def num_ascend(self) -> int:
+        """A ``num_transfer`` where the new hypothesis id had never matched before."""
+
+    @property
+    def num_migrate(self) -> int:
+        """A ``num_transfer`` where the object had never been matched before."""
+
+def compute_motmetrics_switch_events(
+    gt_ids: Sequence[Sequence[int]],
+    pred_ids: Sequence[Sequence[int]],
+    similarity: Sequence[Sequence[Sequence[float]]],
+    threshold: float = 0.5,
+) -> MotMetricsSwitchEvents:
+    """Compute ``py-motmetrics``' ``num_transfer``/``num_ascend``/``num_migrate``
+    from precomputed per-frame similarity matrices.
+
+    Same input convention as :func:`compute_clear_from_similarity`, but
+    matched with ``motmetrics.mot.MOTAccumulator``'s own two-stage algorithm
+    (assuming the default ``max_switch_time=inf``) instead of the core's
+    continuity-biased assignment, since these three fields are only
+    meaningful under that specific matcher.
+    """
+    ...
+
 class IdentityMetrics:
     """Accumulated Identity metrics (IDF1/IDP/IDR) over a sequence."""
 
