@@ -276,4 +276,28 @@ mod tests {
         let e = events(&[], 0.5);
         assert_eq!((e.num_transfer, e.num_ascend, e.num_migrate), (0, 0, 0));
     }
+
+    #[test]
+    fn frame_with_only_gt_or_only_pred_is_a_no_op() {
+        // A frame with objects but no predictions (or vice versa) can't match
+        // anything; the matcher must bail out without touching its state.
+        let frames = [
+            (vec![1], vec![10], vec![vec![1.0]]),
+            (vec![1], vec![], vec![]),
+            (vec![], vec![10], vec![]),
+            (vec![1], vec![10], vec![vec![1.0]]),
+        ];
+        let e = events(&frames, 0.5);
+        assert_eq!((e.num_transfer, e.num_ascend, e.num_migrate), (0, 0, 0));
+    }
+
+    #[test]
+    fn stage_two_skips_a_forced_pair_below_threshold() {
+        // One object, two predictions, both below threshold: the LAP still
+        // has to return a pair (more columns than rows), but it must be
+        // discarded rather than treated as a match.
+        let frames = [(vec![1], vec![10, 20], vec![vec![0.0, 0.0]])];
+        let e = events(&frames, 0.5);
+        assert_eq!((e.num_transfer, e.num_ascend, e.num_migrate), (0, 0, 0));
+    }
 }
