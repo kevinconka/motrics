@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --group dev --group parity
+      - run: uv sync --group parity # dev is uv's default group
       - run: uv run maturin develop --release --uv
       # split via env var, not inline interpolation (avoids shell injection)
       - run: uv run python benchmarks/download.py --split "$SPLIT"
