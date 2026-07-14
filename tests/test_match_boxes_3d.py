@@ -99,3 +99,12 @@ def test_numpy_wrong_shape_raises() -> None:
     bad = np.zeros((2, 4), dtype=np.float64)
     with pytest.raises(ValueError, match=r"shape \(N, 7\)"):
         motrics.match_boxes_3d(bad, bad)
+
+
+def test_numpy_wrong_shape_in_second_argument_raises() -> None:
+    # boxes_a is valid, so this exercises boxes_b's own shape check rather
+    # than short-circuiting on boxes_a's.
+    good = np.asarray([_box(0.0)], dtype=np.float64)
+    bad = np.zeros((1, 4), dtype=np.float64)
+    with pytest.raises(ValueError, match=r"shape \(N, 7\)"):
+        motrics.match_boxes_3d(good, bad)
