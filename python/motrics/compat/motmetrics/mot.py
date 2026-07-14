@@ -116,3 +116,8 @@ class MOTAccumulator:
         return motrics.compute_identity_from_similarity(
             self._gt_ids, self._pred_ids, self._similarity, threshold=_THRESHOLD
         )
+
+    def _switch_events(self) -> motrics.MotMetricsSwitchEvents:
+        return motrics.compute_motmetrics_switch_events(
+            self._gt_ids, self._pred_ids, self._similarity, threshold=_THRESHOLD
+        )

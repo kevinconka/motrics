@@ -95,10 +95,11 @@ summary = mm.metrics.create().compute(acc, metrics=mm.metrics.SUPPORTED, name="a
 
 `pip install motrics[compat]` (pulls in pandas, needed only for this subpackage).
 
-| | |
-| --- | --- |
-| ✅ Supported | `mota`, `motp`, `idf1`, `idp`, `idr`, `recall`, `precision`, `num_false_positives`, `num_misses`, `num_switches`, `num_unique_objects`, `mostly_tracked`, `partially_tracked`, `mostly_lost`, `num_fragmentations` |
-| ❌ Not yet | `num_transfer`/`num_ascend`/`num_migrate` (switch subtypes needing py-motmetrics' event-level matcher) — raises `NotImplementedError` naming what's missing |
+All of `motmetrics.metrics.motchallenge_metrics` is supported: `mota`, `motp`,
+`idf1`, `idp`, `idr`, `recall`, `precision`, `num_false_positives`,
+`num_misses`, `num_switches`, `num_unique_objects`, `mostly_tracked`,
+`partially_tracked`, `mostly_lost`, `num_fragmentations`, `num_transfer`,
+`num_ascend`, `num_migrate`.
 
 See [`python/motrics/compat/motmetrics/`](python/motrics/compat/motmetrics/)
 for what else differs (e.g. no `events`/`mot_events` DataFrame).
@@ -255,13 +256,15 @@ it yourself.
         miss), unlike TrackEval's `frag`, which also breaks on frames where
         the object is simply absent; both are computed from the same
         per-frame matching pass, validated against real py-motmetrics.
-  - [ ] `num_transfer`/`num_ascend`/`num_migrate` — the last
-        `compat.motmetrics` fields still raising `NotImplementedError`. These
-        switch subtypes need py-motmetrics' own event-level matcher (a
-        priority pass that preserves existing object/hypothesis pairs, then
-        LAP for the remainder, plus persistent hypothesis-side history) —
-        structurally different from the core's single continuity-biased LAP
-        pass, so this is separate, larger work.
+  - [x] `num_transfer`/`num_ascend`/`num_migrate` — the last
+        `compat.motmetrics` fields, all supported now. A new core function
+        (`compute_motmetrics_switch_events`) reproduces py-motmetrics' own
+        event-level matcher: a priority pass that preserves existing
+        object/hypothesis pairs, then LAP for the remainder, plus persistent
+        hypothesis-side history (`res_m`/`hypHistory`) — structurally
+        different from `ClearMetrics`' single continuity-biased LAP pass, so
+        it lives alongside it rather than reusing it. Validated bit-exact
+        against real py-motmetrics.
   - [ ] Other TrackEval metrics — `IDEucl`, `TrackMAP`, `VACE`, and `JAndF`
         (J&F). J&F is DAVIS's native metric, so this also completes the DAVIS
         adapter beyond the CLEAR/Identity/HOTA it serves today.
