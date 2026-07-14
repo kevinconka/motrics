@@ -1,9 +1,9 @@
 # Contributing
 
 Thanks for considering a contribution to `motrics`. This covers getting set
-up and the checks a PR needs to pass; for project layout, coding conventions,
-and the full roadmap, see [AGENTS.md](AGENTS.md) — it's written for human and
-AI contributors alike.
+up and the checks a PR needs to pass. For project layout, coding conventions,
+and the full roadmap, see [AGENTS.md](AGENTS.md), which is written for human
+and AI contributors alike.
 
 ## Setup
 
@@ -26,7 +26,7 @@ uv run maturin develop     # compile the Rust extension into the venv (rerun aft
 
 Optional: `pre-commit install` to run the formatters/linters on every commit.
 
-## Checks — run before opening a PR
+## Checks to run before opening a PR
 
 These mirror CI; all must pass.
 

@@ -1,15 +1,14 @@
 """Drop-in for ``motmetrics.metrics``, backed by motrics' Rust core.
 
-All of ``motmetrics.metrics.motchallenge_metrics`` is implemented: the
-CLEAR/Identity metrics, the per-trajectory
+The full ``motmetrics.metrics.motchallenge_metrics`` field set is
+implemented: the CLEAR/Identity metrics, the per-trajectory
 mostly_tracked/partially_tracked/mostly_lost counts (from the core's
 per-trajectory track ratios, applying py-motmetrics' inclusive ``>=0.8``/
-``<0.2`` bounds), num_fragmentations (from the core's ``frag_present_only``,
-which — unlike ``frag``'s TrackEval semantics — only breaks a track on a
-*present* miss, matching py-motmetrics' own definition), and
-num_transfer/num_ascend/num_migrate (from ``compute_motmetrics_switch_events``,
-which reproduces py-motmetrics' own two-stage matcher and hypothesis-side
-match history instead of the core's continuity-biased single assignment).
+``<0.2`` bounds), num_fragmentations (from the core's
+``frag_present_only``, which unlike ``frag``'s TrackEval semantics only
+breaks a track on a *present* miss, matching py-motmetrics' own definition),
+and the switch subtypes num_transfer/num_ascend/num_migrate (from a ported
+event-level matcher, see ``src/motmetrics_switches.rs``).
 """
 
 from __future__ import annotations
