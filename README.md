@@ -1,9 +1,7 @@
 <h1 align="center">motrics</h1>
 
 <p align="center">
-  <em>An extremely fast MOT and HOTA metrics library, written in Rust:
-  CLEAR (MOTA/MOTP), Identity (IDF1), and HOTA, with an ergonomic Python
-  API.</em>
+  <em>Fast MOT and HOTA metrics for Python, powered by Rust.</em>
 </p>
 
 <p align="center">
