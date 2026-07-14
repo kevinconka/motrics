@@ -191,6 +191,21 @@ def match_boxes(
     """
     ...
 
+def match_boxes_3d(
+    boxes_a: Boxes3d,
+    boxes_b: Boxes3d,
+    iou_threshold: float = 0.5,
+    method: str = "hungarian",
+) -> Matching:
+    """Match two sets of oriented 3D boxes, mirroring :func:`match_boxes` for
+    3D IoU.
+
+    ``method`` is ``"hungarian"`` (optimal, maximises total IoU) or ``"greedy"``
+    (assign highest-IoU pairs first). Only pairs with IoU at or above
+    ``iou_threshold`` are kept.
+    """
+    ...
+
 def match_masks(
     masks_a: Sequence[MaskLike],
     masks_b: Sequence[MaskLike],

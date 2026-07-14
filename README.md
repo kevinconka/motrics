@@ -268,7 +268,7 @@ it yourself.
   - [ ] Remaining `compat.trackeval` `Evaluator` behaviors — parallel
         evaluation, printing/plotting output, zipped input, `DO_PREPROC=False`,
         `MOT15`, and `BREAK_ON_ERROR`.
-- [ ] Pluggable dataset-adapter layer — one metric core, one small adapter per
+- [x] Pluggable dataset-adapter layer — one metric core, one small adapter per
       benchmark (ingest + preprocessing + similarity), added incrementally:
   - [x] DanceTrack — no adapter code needed. Its `gt.txt`/results format is
         byte-for-byte MOTChallenge's (fixed class=1/consider=1 columns), and
@@ -327,7 +327,22 @@ it yourself.
         the existing box-IoU path and returns
         `(gt_ids, gt_boxes, pred_ids, pred_boxes)` for the `compute_*`
         functions; validated against TrackEval's own `get_preprocessed_seq_data`.
-  - [ ] 3D similarity kernel (KITTI-3D) — same as above, separate core work.
+  - [x] 3D similarity kernel (KITTI-3D) — `iou_3d`/`iou_3d_matrix` compute
+        volumetric IoU of oriented boxes (BEV footprint intersected exactly
+        with a convex clip, scaled by height overlap), validated against an
+        independent shapely reference over random rotated boxes.
+        `load_kitti_3d`/`load_kitti_3d_gt` + `preprocess_kitti_3d` and
+        `match_boxes_3d` (a 3D-IoU sibling to `match_boxes`) then read
+        KITTI's tracking format, which already carries a 3D box on the same
+        rows the 2D adapter uses, and apply `preprocess_kitti`'s own
+        TrackEval-validated rules (per-class evaluation, distractors,
+        occlusion/truncation, min-height/`DontCare` filtering) scored by 3D
+        IoU instead of 2D IoU. TrackEval has no KITTI-3D dataset to validate
+        against directly, so this is checked by reducing the 2D adapter's
+        own parity-tested scenario to 3D and asserting the same keep/drop
+        decisions come out. Like KITTI-MOTS, preprocessing returns ids plus
+        a precomputed similarity matrix for the `compute_*_from_similarity`
+        functions.
 
 </details>
 
