@@ -132,10 +132,18 @@ dataset_config["GT_FOLDER"] = "data/gt/mot_challenge/"
 dataset_config["TRACKERS_FOLDER"] = "data/trackers/mot_challenge/"
 dataset_list = [trackeval.datasets.MotChallenge2DBox(dataset_config)]
 
-metrics_list = [trackeval.metrics.HOTA(), trackeval.metrics.CLEAR(), trackeval.metrics.Identity()]
+metrics_list = [
+    trackeval.metrics.HOTA(),
+    trackeval.metrics.CLEAR(),
+    trackeval.metrics.Identity(),
+]
 
 results, messages = evaluator.evaluate(dataset_list, metrics_list)
-print(results["MotChallenge2DBox"]["my_tracker"]["COMBINED_SEQ"]["pedestrian"]["CLEAR"]["MOTA"])
+print(
+    results["MotChallenge2DBox"]["my_tracker"]["COMBINED_SEQ"]["pedestrian"]["CLEAR"][
+        "MOTA"
+    ]
+)
 ```
 
 Same class names, config keys, directory/seqmap conventions, and result shape
